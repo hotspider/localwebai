@@ -9,6 +9,7 @@ import '../../core/ui/app_grouped_surface.dart';
 import '../../core/ui/app_section_header.dart';
 import '../../core/ui/model_selector_sheet.dart';
 import '../auth/auth_controller.dart';
+import 'settings_api_endpoint_section.dart';
 import 'settings_controller.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -90,6 +91,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.xl),
+          const SettingsApiEndpointSection(),
           const SizedBox(height: AppSpacing.xl),
           const AppSectionHeader(label: '偏好'),
           AppGroupedSurface(
