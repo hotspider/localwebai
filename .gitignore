@@ -1,0 +1,14 @@
+# secrets (never commit)
+backend/.env
+docker/.env.prod
+
+# local runtime / virtualenv / data
+backend/.data/
+backend/.venv/
+
+# Flutter / build outputs
+ios_app/build/
+ios_app/.dart_tool/
+
+# OS junk
+**/.DS_Store
