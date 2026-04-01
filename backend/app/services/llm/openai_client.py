@@ -53,13 +53,23 @@ def _message_content_to_text(content: Any) -> str:
 
 
 class OpenAIClient(LlmClient):
-    def __init__(self) -> None:
-        self.api_key = settings.openai_api_key
-        self.base_url = settings.openai_base_url.rstrip("/")
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        proxy: str | None = None,
+    ) -> None:
+        self.api_key = settings.openai_api_key if api_key is None else api_key
+        base = settings.openai_base_url if base_url is None else base_url
+        self.base_url = base.rstrip("/")
+        self._proxy = (settings.openai_proxy if proxy is None else proxy).strip() or None
 
     async def chat_text(self, *, messages: list[dict], model: str) -> LlmResponse:
         if not self.api_key:
-            raise RuntimeError("OPENAI_API_KEY 未配置：请在后端 .env 中设置 OPENAI_API_KEY")
+            raise RuntimeError(
+                "OPENAI_API_KEY 未配置：请在管理后台「LLM 配置」填写，或在后端 .env 中设置 OPENAI_API_KEY"
+            )
 
         url = f"{self.base_url}/chat/completions"
         headers = {
@@ -69,7 +79,7 @@ class OpenAIClient(LlmClient):
         payload: dict[str, Any] = {"model": model, "messages": messages}
         timeout = httpx.Timeout(180.0, connect=60.0, pool=30.0)
         limits = httpx.Limits(max_keepalive_connections=2, max_connections=10)
-        proxy = (settings.openai_proxy or "").strip() or None
+        proxy = self._proxy
         data: dict[str, Any] | None = None
         last_transport: httpx.RequestError | None = None
 

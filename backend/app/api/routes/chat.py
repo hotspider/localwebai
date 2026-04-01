@@ -18,6 +18,7 @@ from app.schemas.chat import ChatSendRequest, ChatSendResponse, MessageOut, Sour
 from app.services.attachments.storage import get_storage_driver
 from app.services.llm.deepseek_client import DeepSeekClient
 from app.services.llm.openai_client import OpenAIClient
+from app.services.runtime_settings import effective_deepseek_config, effective_openai_config
 from app.services.llm.prompts import SYSTEM_PROMPT
 from app.services.chat.session_title import derive_conversation_title
 from app.services.search.web_search import web_search
@@ -193,12 +194,14 @@ async def send_message(
     # Call model
     try:
         if is_openai_route(model):
-            client = OpenAIClient()
+            ocfg = effective_openai_config(db)
+            client = OpenAIClient(api_key=ocfg.api_key, base_url=ocfg.base_url, proxy=ocfg.proxy)
             use_model = settings.openai_model_vision if image_attachments else openai_completion_model_id(model)
             resp = await client.chat(messages=llm_messages, model=use_model)
             assistant_text = resp.text
         else:
-            client = DeepSeekClient()
+            dcfg = effective_deepseek_config(db)
+            client = DeepSeekClient(api_key=dcfg.api_key, base_url=dcfg.base_url)
             resp = await client.chat_text(messages=llm_messages, model=settings.deepseek_model_text)
             assistant_text = resp.text
     except Exception as e:

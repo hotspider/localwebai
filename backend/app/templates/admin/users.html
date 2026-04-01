@@ -8,9 +8,12 @@
   <body class="page">
     <div class="topbar">
       <div class="title">用户管理</div>
-      <form method="post" action="/admin/logout">
-        <button type="submit">退出</button>
-      </form>
+      <div style="display:flex; gap:12px; align-items:center;">
+        <a href="/admin/settings">LLM 配置</a>
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button type="submit">退出</button>
+        </form>
+      </div>
     </div>
 
     <div class="grid">

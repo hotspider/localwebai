@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.db.session import SessionLocal
+from app.models.runtime_setting import RuntimeSetting
 from app.models.usage_event import UsageEvent
 from app.models.user import User
+from app.services import runtime_settings as rs
 
 
 templates = Jinja2Templates(directory="app/templates")
@@ -66,6 +68,79 @@ def admin_login_submit(
 def admin_logout(request: Request):
     request.session.pop("admin_user_id", None)
     return RedirectResponse(url="/admin/login", status_code=303)
+
+
+@router.get("/admin/settings", response_class=HTMLResponse)
+def admin_settings_page(request: Request, db: Session = Depends(_db)):
+    admin = _require_admin_web(request, db)
+    ocfg = rs.effective_openai_config(db)
+    dcfg = rs.effective_deepseek_config(db)
+    row_ob = db.get(RuntimeSetting, rs.KEY_OPENAI_BASE_URL)
+    row_op = db.get(RuntimeSetting, rs.KEY_OPENAI_PROXY)
+    row_db = db.get(RuntimeSetting, rs.KEY_DEEPSEEK_BASE_URL)
+    return templates.TemplateResponse(
+        "admin/settings.html",
+        {
+            "request": request,
+            "admin": admin,
+            "app_name": settings.app_name,
+            "openai_base_url_effective": ocfg.base_url,
+            "openai_proxy_effective": ocfg.proxy,
+            "deepseek_base_url_effective": dcfg.base_url,
+            "openai_base_url_input": (row_ob.value if row_ob else "") or "",
+            "openai_proxy_input": (row_op.value if row_op else "") or "",
+            "deepseek_base_url_input": (row_db.value if row_db else "") or "",
+            "openai_key_stored_in_db": rs.has_db_openai_key(db),
+            "deepseek_key_stored_in_db": rs.has_db_deepseek_key(db),
+            "saved_ok": request.query_params.get("ok") == "1",
+        },
+    )
+
+
+@router.post("/admin/settings")
+def admin_settings_save(
+    request: Request,
+    openai_api_key: str = Form(""),
+    clear_openai_api_key: str = Form(None),
+    openai_base_url: str = Form(""),
+    openai_proxy: str = Form(""),
+    deepseek_api_key: str = Form(""),
+    clear_deepseek_api_key: str = Form(None),
+    deepseek_base_url: str = Form(""),
+    db: Session = Depends(_db),
+):
+    _require_admin_web(request, db)
+
+    if clear_openai_api_key == "on":
+        rs.delete_setting(db, rs.KEY_OPENAI_API_KEY)
+    elif openai_api_key.strip():
+        rs.upsert_setting(db, rs.KEY_OPENAI_API_KEY, openai_api_key.strip())
+
+    t = openai_base_url.strip()
+    if t:
+        rs.upsert_setting(db, rs.KEY_OPENAI_BASE_URL, t)
+    else:
+        rs.delete_setting(db, rs.KEY_OPENAI_BASE_URL)
+
+    p = openai_proxy.strip()
+    if p:
+        rs.upsert_setting(db, rs.KEY_OPENAI_PROXY, p)
+    else:
+        rs.delete_setting(db, rs.KEY_OPENAI_PROXY)
+
+    if clear_deepseek_api_key == "on":
+        rs.delete_setting(db, rs.KEY_DEEPSEEK_API_KEY)
+    elif deepseek_api_key.strip():
+        rs.upsert_setting(db, rs.KEY_DEEPSEEK_API_KEY, deepseek_api_key.strip())
+
+    dt = deepseek_base_url.strip()
+    if dt:
+        rs.upsert_setting(db, rs.KEY_DEEPSEEK_BASE_URL, dt)
+    else:
+        rs.delete_setting(db, rs.KEY_DEEPSEEK_BASE_URL)
+
+    db.commit()
+    return RedirectResponse(url="/admin/settings?ok=1", status_code=303)
 
 
 @router.get("/admin/users", response_class=HTMLResponse)

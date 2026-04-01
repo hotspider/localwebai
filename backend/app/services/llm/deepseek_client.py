@@ -7,13 +7,21 @@ from app.services.llm.base import LlmClient, LlmResponse
 
 
 class DeepSeekClient(LlmClient):
-    def __init__(self) -> None:
-        self.api_key = settings.deepseek_api_key
-        self.base_url = settings.deepseek_base_url.rstrip("/")
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
+        self.api_key = settings.deepseek_api_key if api_key is None else api_key
+        b = settings.deepseek_base_url if base_url is None else base_url
+        self.base_url = b.rstrip("/")
 
     async def chat_text(self, *, messages: list[dict], model: str) -> LlmResponse:
         if not self.api_key:
-            raise RuntimeError("DEEPSEEK_API_KEY not configured")
+            raise RuntimeError(
+                "DEEPSEEK_API_KEY 未配置：请在管理后台「LLM 配置」填写，或在 .env 设置 DEEPSEEK_API_KEY"
+            )
 
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}"}
