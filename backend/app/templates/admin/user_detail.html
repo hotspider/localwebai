@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ app_name }} 管理后台 - {{ u.username }}</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body class="page">
+    <div class="topbar">
+      <div class="title">账号：{{ u.username }}</div>
+      <div class="actions">
+        <a class="btn" href="/admin/users">返回列表</a>
+        <form method="post" action="/admin/logout">
+          <button type="submit">退出</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>状态与权限</h2>
+        <div class="kv"><span>启用</span><span>{{ "是" if u.is_active else "否" }}</span></div>
+        <div class="kv"><span>最近登录</span><span>{{ u.last_login_at or "" }}</span></div>
+        <div class="kv"><span>登录次数</span><span>{{ u.login_count }}</span></div>
+        <div class="kv"><span>消息次数</span><span>{{ u.chat_message_count }}</span></div>
+
+        <form method="post" action="/admin/users/{{ u.id }}/toggle-active">
+          <button type="submit">{{ "禁用" if u.is_active else "启用" }}</button>
+        </form>
+
+        <hr />
+        <form method="post" action="/admin/users/{{ u.id }}/permissions">
+          <label><input type="checkbox" name="can_web_search" {% if u.can_web_search %}checked{% endif %} />允许联网搜索</label>
+          <label><input type="checkbox" name="can_upload" {% if u.can_upload %}checked{% endif %} />允许上传附件</label>
+          <button type="submit">保存权限</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>重置密码</h2>
+        <p class="muted">重置后将要求用户下次登录后修改密码。</p>
+        <form method="post" action="/admin/users/{{ u.id }}/reset-password">
+          <label>新临时密码</label>
+          <input name="new_temp_password" type="text" />
+          <button type="submit">重置密码</button>
+        </form>
+
+        <hr />
+        <h2>删除账号</h2>
+        <form method="post" action="/admin/users/{{ u.id }}/delete" onsubmit="return confirm('确定删除该账号？');">
+          <button class="danger" type="submit">删除账号</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
+

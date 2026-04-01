@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ app_name }} 管理后台 - 用户</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body class="page">
+    <div class="topbar">
+      <div class="title">用户管理</div>
+      <form method="post" action="/admin/logout">
+        <button type="submit">退出</button>
+      </form>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>创建账号</h2>
+        <form method="post" action="/admin/users">
+          <label>用户名</label>
+          <input name="username" />
+          <label>临时密码</label>
+          <input name="temp_password" type="text" />
+          <div class="row">
+            <label><input type="checkbox" name="can_web_search" />允许联网搜索</label>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" name="can_upload" checked />允许上传附件</label>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" name="is_active" checked />启用账号</label>
+          </div>
+          <button type="submit">创建</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>账号列表</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>启用</th>
+              <th>最近登录</th>
+              <th>登录次数</th>
+              <th>消息次数</th>
+              <th>联网</th>
+              <th>上传</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td>{{ u.username }}</td>
+              <td>{{ "是" if u.is_active else "否" }}</td>
+              <td>{{ u.last_login_at or "" }}</td>
+              <td>{{ u.login_count }}</td>
+              <td>{{ u.chat_message_count }}</td>
+              <td>{{ "是" if u.can_web_search else "否" }}</td>
+              <td>{{ "是" if u.can_upload else "否" }}</td>
+              <td><a href="/admin/users/{{ u.id }}">管理</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>
+

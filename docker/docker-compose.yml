@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: family_ai
+      POSTGRES_USER: family_ai
+      POSTGRES_PASSWORD: family_ai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - family_ai_db:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - family_ai_uploads:/data/uploads
+    depends_on:
+      - db
+
+volumes:
+  family_ai_db:
+  family_ai_uploads:
+
