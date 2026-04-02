@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/format/error_messages.dart';
 import '../../core/theme/app_theme.dart';
-import '../settings/settings_api_endpoint_section.dart';
 import 'auth_controller.dart';
 
 class LoginPage extends StatefulWidget {
@@ -24,26 +23,6 @@ class _LoginPageState extends State<LoginPage> {
     _username.dispose();
     _password.dispose();
     super.dispose();
-  }
-
-  void _openApiEndpointSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (ctx) => Scaffold(
-          backgroundColor: AppColors.backgroundSecondary,
-          appBar: AppBar(
-            title: const Text('接口地址'),
-            backgroundColor: AppColors.backgroundSecondary,
-          ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xxl),
-            children: const [
-              SettingsApiEndpointSection(),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _submit() async {
@@ -165,15 +144,6 @@ class _LoginPageState extends State<LoginPage> {
                         obscureText: true,
                         onSubmitted: (_) => _submit(),
                         autofillHints: const [AutofillHints.password],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: _loading ? null : _openApiEndpointSettings,
-                          icon: const Icon(Icons.dns_rounded, size: 18),
-                          label: const Text('接口地址（本地 / 公网）'),
-                        ),
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.md),

@@ -92,26 +92,44 @@ class _SendStateRow extends StatelessWidget {
         ],
       );
     }
-    return Row(
+    final detail = error?.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.error_outline_rounded, size: 16, color: ChatColors.error),
-        const SizedBox(width: 6),
-        Text(
-          (error?.trim().isNotEmpty == true) ? '发送失败' : '发送失败',
-          style: const TextStyle(fontSize: 12, color: ChatColors.error, height: 1.1, fontWeight: FontWeight.w600),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 16, color: ChatColors.error),
+            const SizedBox(width: 6),
+            const Text(
+              '发送失败',
+              style: TextStyle(fontSize: 12, color: ChatColors.error, height: 1.1, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: ChatColors.error,
+              ),
+              child: const Text('重试', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        TextButton(
-          onPressed: onRetry,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: ChatColors.error,
+        if (detail != null && detail.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: SelectableText(
+                detail,
+                style: const TextStyle(fontSize: 11, color: ChatColors.textTertiary, height: 1.35),
+              ),
+            ),
           ),
-          child: const Text('重试', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-        ),
       ],
     );
   }

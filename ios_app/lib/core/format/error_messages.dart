@@ -13,7 +13,7 @@ String describeErrorForUser(Object e) {
         if (kDebugMode) {
           final detail = e.message.trim();
           return '网络异常\n$detail\n当前 API：${CurrentApiBase.display}\n'
-              '可在「设置 → 接口地址」切换本地/公网；本地时请确认本机后端已启动。';
+              'Debug 联调请确认本机后端已启动；Release 包使用 `app_api_host.dart` 中的外网地址。';
         }
         return '网络异常，请检查网络或确认后端已启动';
       case 'VALIDATION_ERROR':
