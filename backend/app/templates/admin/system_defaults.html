@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} - 系统默认</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body class="page">
+    {% set nav_title = "系统默认设置" %}
+    {% set nav_active = "defaults" %}
+    {% include "admin/_nav.html" %}
+
+    {% if saved_ok %}
+    <div class="banner-ok" role="status">已保存。</div>
+    {% endif %}
+
+    <div class="grid" style="max-width:720px;">
+      <div class="card">
+        <h2 style="margin-top:0;">运行与安全（说明）</h2>
+        <p style="font-size:14px; color:#555; line-height:1.55;">
+          敏感配置（OpenAI / DeepSeek / Brave 等 API Key）在管理后台以<strong>明文输入</strong>提交，由服务端使用环境变量 <code>FIELD_ENCRYPTION_FERNET_KEY</code> <strong>加密后写入数据库</strong>；业务请求时在<strong>服务端解密</strong>。该主密钥<strong>仅</strong>配置在服务器 <code>.env</code>，不在此页编辑。
+        </p>
+        <p style="font-size:14px; color:#555;">
+          当前 Fernet 主密钥状态：<strong>{{ "已配置" if fernet_ok else "未配置" }}</strong>
+          {% if not fernet_ok %}<span style="color:#b45309;">（未配置时无法在后台保存上述 API Key）</span>{% endif %}
+        </p>
+        <p style="font-size:14px; color:#555;">
+          Brave 的开关与 Key 请在 <a href="/admin/brave">Brave 配置</a> 维护；状态总览见 <a href="/admin/realtime">实时能力</a>。
+        </p>
+
+        <h2>新用户默认权限</h2>
+        <p style="font-size:13px; color:#666;">创建用户时若选择「遵循系统默认」，将使用此处设置。</p>
+        <form method="post" action="/admin/system-defaults">
+          <div class="row" style="margin:8px 0;">
+            <label><input type="checkbox" name="default_new_user_web_search" {% if default_web %}checked{% endif %} />默认允许新用户「联网搜索（实时）」权限</label>
+          </div>
+          <div class="form-actions">
+            <button type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

@@ -14,12 +14,17 @@ class AuthController extends ChangeNotifier {
   Map<String, dynamic>? me;
 
   Future<void> init() async {
-    final token = await secureStore.readToken();
-    isLoggedIn = token != null && token.isNotEmpty;
-    isReady = true;
-    notifyListeners();
-    if (isLoggedIn) {
-      await refreshMe(silent: true);
+    try {
+      final token = await secureStore.readToken();
+      isLoggedIn = token != null && token.isNotEmpty;
+      if (isLoggedIn) {
+        await refreshMe(silent: true);
+      }
+    } catch (_) {
+      isLoggedIn = false;
+    } finally {
+      isReady = true;
+      notifyListeners();
     }
   }
 

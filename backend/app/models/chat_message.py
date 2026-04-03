@@ -30,6 +30,9 @@ class ChatMessage(Base):
     model: Mapped[str] = mapped_column(String(32), nullable=False)
     web_search_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     sources_json: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    realtime_meta: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
+    # 本条用户消息发送时勾选的附件（uuid 字符串列表）；assistant 为空
+    attachment_ids: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

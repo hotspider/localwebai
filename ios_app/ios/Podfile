@@ -27,7 +27,9 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  # 动态 Framework + 部分 Swift 插件会在 VerifyModule 阶段报 `module 'Flutter' not found`；
+  # 与 Flutter 官方推荐一致，使用静态链接。
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -36,7 +38,23 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # 工程级：与各 Pod target 一致，避免仅 target 写 NO 仍继承默认校验
+  installer.pods_project.build_configurations.each do |config|
+    config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+    config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+    config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+    config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
+  end
+
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Swift Pod 在 VerifyModule 隔离编译时找不到 Flutter.framework → module 'Flutter' not found
+      config.build_settings['ENABLE_MODULE_VERIFIER'] = 'NO'
+      # Xcode 16+ 显式模块路径下仍可能跑校验，一并关闭（未知 key 会被忽略）
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['SWIFT_EMIT_MODULE_INTERFACE'] = 'NO'
+    end
   end
 end

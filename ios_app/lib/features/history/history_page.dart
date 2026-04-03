@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,26 +20,27 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   final _search = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<HistoryController>().refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<HistoryController>().fetchSessionList(resetToRecent: true));
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
 
-  List<Map<String, dynamic>> _filtered(List<Map<String, dynamic>> sessions) {
-    final q = _search.text.trim().toLowerCase();
-    if (q.isEmpty) return sessions;
-    return sessions.where((s) {
-      final title = (s['title'] as String?)?.toLowerCase() ?? '';
-      return title.contains(q);
-    }).toList();
+  void _scheduleListFetch() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 380), () {
+      if (!mounted) return;
+      context.read<HistoryController>().fetchSessionList(q: _search.text.trim());
+    });
   }
 
   Future<void> _openSession(BuildContext context, String id) async {
@@ -77,9 +80,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final h = context.watch<HistoryController>();
-    final filtered = _filtered(h.sessions);
-    final hasQuery = _search.text.trim().isNotEmpty;
-    final searchNoResults = !h.loading && h.sessions.isNotEmpty && filtered.isEmpty;
+    final hasQuery = h.listSearchQuery.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: ChatColors.pageBg,
@@ -112,7 +113,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 TextButton(
                   onPressed: () {
                     context.read<HistoryController>().clearError();
-                    context.read<HistoryController>().refresh();
+                    context.read<HistoryController>().fetchSessionList();
                   },
                   child: const Text('重试'),
                 ),
@@ -122,7 +123,10 @@ class _HistoryPageState extends State<HistoryPage> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: TextField(
               controller: _search,
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {});
+                _scheduleListFetch();
+              },
               style: const TextStyle(color: ChatColors.textPrimary, fontSize: 15),
               decoration: InputDecoration(
                 hintText: '搜索对话标题或内容',
@@ -148,198 +152,205 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
           ),
           Expanded(
-            child: h.loading
-                ? const Center(child: CircularProgressIndicator(color: ChatColors.accentBlue))
-                : h.sessions.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+            child: Builder(
+              builder: (context) {
+                if (h.loading && h.sessions.isEmpty) {
+                  return const Center(child: CircularProgressIndicator(color: ChatColors.accentBlue));
+                }
+                if (h.sessions.isEmpty) {
+                  if (hasQuery) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.search_off_rounded,
+                              size: 44,
+                              color: ChatColors.textMuted.withValues(alpha: 0.45),
+                            ),
+                            const SizedBox(height: 14),
+                            const Text(
+                              '未找到相关对话',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                color: ChatColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              '试试更换关键词，或缩短检索词。',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: ChatColors.textMuted, fontSize: 14, height: 1.4),
+                            ),
+                            const SizedBox(height: 20),
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: ChatColors.textSecondary,
+                                side: const BorderSide(color: ChatColors.dividerMain),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                              onPressed: () {
+                                _debounce?.cancel();
+                                _search.clear();
+                                setState(() {});
+                                context.read<HistoryController>().fetchSessionList(q: '');
+                              },
+                              child: const Text('清除搜索'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 44,
+                            color: ChatColors.textMuted.withValues(alpha: 0.45),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            '还没有历史对话',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: ChatColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            '发起一次新对话后，聊天记录会显示在这里。',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: ChatColors.textMuted, fontSize: 14, height: 1.4),
+                          ),
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: ChatColors.accentBlue,
+                              foregroundColor: ChatColors.textOnAccent,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                            onPressed: () async {
+                              await context.read<ChatController>().newSession();
+                              if (!context.mounted) return;
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('去发起新对话'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  itemCount: h.sessions.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final s = h.sessions[i];
+                    final title = s['title'] as String?;
+                    final displayTitle = displayChatSessionTitle(title);
+                    final modelLabel = LlmModel.fromApi(s['default_model'] as String? ?? 'chatgpt-5.2').label;
+                    final timeStr = formatSessionListTime(s['last_message_at'] as String?);
+                    final rawCount = s['attachment_count'];
+                    final attachmentCount = rawCount is int
+                        ? rawCount
+                        : int.tryParse(rawCount?.toString() ?? '') ?? 0;
+                    final secondLine = <String>[
+                      if (timeStr.isNotEmpty) timeStr,
+                      modelLabel,
+                    ].join(' · ');
+                    return Material(
+                      color: ChatColors.contentBg,
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _openSession(context, s['id'] as String),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: ChatColors.dividerMain),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.chat_bubble_outline_rounded,
-                                size: 44,
-                                color: ChatColors.textMuted.withValues(alpha: 0.45),
-                              ),
-                              const SizedBox(height: 14),
-                              const Text(
-                                '还没有历史对话',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: ChatColors.textPrimary,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayTitle,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 16,
+                                        height: 1.25,
+                                        color: ChatColors.textPrimary,
+                                      ),
+                                    ),
+                                    if (secondLine.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        secondLine,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          height: 1.2,
+                                          color: ChatColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                    if (attachmentCount > 0) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '$attachmentCount 个附件',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          height: 1.2,
+                                          color: ChatColors.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                '发起一次新对话后，聊天记录会显示在这里。',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: ChatColors.textMuted, fontSize: 14, height: 1.4),
-                              ),
-                              const SizedBox(height: 20),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: ChatColors.accentBlue,
-                                  foregroundColor: ChatColors.textOnAccent,
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                ),
-                                onPressed: () async {
-                                  await context.read<ChatController>().newSession();
-                                  if (!context.mounted) return;
-                                  Navigator.of(context).pop();
+                              PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                                icon: Icon(Icons.more_vert_rounded, size: 20, color: ChatColors.textMuted.withValues(alpha: 0.85)),
+                                onSelected: (v) {
+                                  if (v == 'delete') {
+                                    _deleteSession(context, s['id'] as String);
+                                  }
                                 },
-                                child: const Text('去发起新对话'),
+                                itemBuilder: (ctx) => const [
+                                  PopupMenuItem(value: 'delete', child: Text('删除对话')),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                      )
-                    : searchNoResults
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.search_off_rounded,
-                                    size: 44,
-                                    color: ChatColors.textMuted.withValues(alpha: 0.45),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  const Text(
-                                    '未找到相关对话',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                      color: ChatColors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    '试试更换关键词，或返回查看全部历史记录。',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: ChatColors.textMuted, fontSize: 14, height: 1.4),
-                                  ),
-                                  if (hasQuery) ...[
-                                    const SizedBox(height: 20),
-                                    OutlinedButton(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: ChatColors.textSecondary,
-                                        side: const BorderSide(color: ChatColors.dividerMain),
-                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      ),
-                                      onPressed: () {
-                                        _search.clear();
-                                        setState(() {});
-                                      },
-                                      child: const Text('清除搜索'),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 8),
-                            itemBuilder: (context, i) {
-                              final s = filtered[i];
-                              final title = s['title'] as String?;
-                              final displayTitle = displayChatSessionTitle(title);
-                              final modelLabel = LlmModel.fromApi(s['default_model'] as String? ?? 'chatgpt-5.2').label;
-                              final timeStr = formatSessionListTime(s['last_message_at'] as String?);
-                              final rawCount = s['attachment_count'];
-                              final attachmentCount = rawCount is int
-                                  ? rawCount
-                                  : int.tryParse(rawCount?.toString() ?? '') ?? 0;
-                              final secondLine = <String>[
-                                if (timeStr.isNotEmpty) timeStr,
-                                modelLabel,
-                              ].join(' · ');
-                              return Material(
-                                color: ChatColors.contentBg,
-                                borderRadius: BorderRadius.circular(20),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(20),
-                                  onTap: () => _openSession(context, s['id'] as String),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: ChatColors.dividerMain),
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(16, 14, 4, 14),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                displayTitle,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 16,
-                                                  height: 1.25,
-                                                  color: ChatColors.textPrimary,
-                                                ),
-                                              ),
-                                              if (secondLine.isNotEmpty) ...[
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  secondLine,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.2,
-                                                    color: ChatColors.textMuted,
-                                                  ),
-                                                ),
-                                              ],
-                                              if (attachmentCount > 0) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  '$attachmentCount 个附件',
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.2,
-                                                    color: ChatColors.textMuted,
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                        PopupMenuButton<String>(
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                                          icon: Icon(Icons.more_vert_rounded, size: 20, color: ChatColors.textMuted.withValues(alpha: 0.85)),
-                                          onSelected: (v) {
-                                            if (v == 'delete') {
-                                              _deleteSession(context, s['id'] as String);
-                                            }
-                                          },
-                                          itemBuilder: (ctx) => const [
-                                            PopupMenuItem(value: 'delete', child: Text('删除对话')),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),

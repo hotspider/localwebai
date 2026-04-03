@@ -7,11 +7,20 @@ from pydantic import BaseModel, Field
 from app.core.llm_models import DEFAULT_LLM_MODEL, LLM_MODEL_PATTERN
 
 
+def attachment_ids_from_column(raw: object | None) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(x) for x in raw]
+    return []
+
+
 class SourceItem(BaseModel):
     title: str = ""
     url: str
     snippet: str = ""
-    provider: str = "duckduckgo"
+    provider: str = "brave"
+    type: str = "web"
 
 
 class MessageOut(BaseModel):
@@ -22,6 +31,8 @@ class MessageOut(BaseModel):
     web_search_enabled: bool
     sources: list[SourceItem] = Field(default_factory=list)
     created_at: str
+    realtime_meta: Optional[dict[str, Any]] = None
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 class ChatSendRequest(BaseModel):
@@ -30,6 +41,8 @@ class ChatSendRequest(BaseModel):
     web_search_enabled: bool = False
     # 允许“仅图片/附件不填文字”的提交；具体校验在路由中做
     text: str = Field(default="", max_length=8000)
+    # 本次发送关联的会话附件 id（须为当前会话内 active 附件）；用于历史气泡展示与预览
+    attachment_ids: list[str] = Field(default_factory=list)
 
 
 class ChatSendResponse(BaseModel):
@@ -37,6 +50,10 @@ class ChatSendResponse(BaseModel):
     assistant_message: MessageOut
     # 首条用户发送后由后端生成；客户端可据此更新顶栏/侧栏标题
     session_title: str = ""
+    # 智能化流水线：旧客户端可忽略以下字段
+    task_type: str = "UNKNOWN"
+    warnings: list[str] = Field(default_factory=list)
+    intelligence: dict[str, Any] = Field(default_factory=dict)
 
 
 class SessionCreateRequest(BaseModel):

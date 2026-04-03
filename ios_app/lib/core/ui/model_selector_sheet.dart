@@ -12,12 +12,40 @@ extension LlmModelDescription on LlmModel {
         return '适合日常对话与多场景使用';
       case LlmModel.chatgpt54:
         return '更强推理能力，适合复杂任务';
+      case LlmModel.geminiFlash:
+        return '谷歌 Gemini，响应快，支持图文';
+      case LlmModel.geminiPro:
+        return '谷歌 Gemini，能力更强，支持图文';
       case LlmModel.deepseek:
         return '适合中文问答与文本处理';
     }
   }
 
-  String get uiKindTag => isOpenAiFamily ? 'ChatGPT' : 'DeepSeek';
+  String get uiKindTag {
+    switch (this) {
+      case LlmModel.chatgpt52:
+      case LlmModel.chatgpt54:
+        return 'ChatGPT';
+      case LlmModel.geminiFlash:
+      case LlmModel.geminiPro:
+        return 'Gemini';
+      case LlmModel.deepseek:
+        return 'DeepSeek';
+    }
+  }
+
+  IconData get modelSelectorIcon {
+    switch (this) {
+      case LlmModel.chatgpt52:
+      case LlmModel.chatgpt54:
+        return Icons.bolt_rounded;
+      case LlmModel.geminiFlash:
+      case LlmModel.geminiPro:
+        return Icons.auto_awesome_rounded;
+      case LlmModel.deepseek:
+        return Icons.psychology_outlined;
+    }
+  }
 }
 
 enum ModelSelectorAppearance {
@@ -87,7 +115,7 @@ Future<void> showModelSelectorSheet(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              m.isOpenAiFamily ? Icons.bolt_rounded : Icons.psychology_outlined,
+                              m.modelSelectorIcon,
                               color: isOn ? ChatColors.accentBlue : ChatColors.textTertiary,
                               size: 22,
                             ),
@@ -175,7 +203,7 @@ Future<void> showModelSelectorSheet(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            m.isOpenAiFamily ? Icons.bolt_rounded : Icons.psychology_outlined,
+                            m.modelSelectorIcon,
                             color: isOn ? AppColors.primary : AppColors.textSecondary,
                             size: 22,
                           ),

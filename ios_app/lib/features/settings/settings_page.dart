@@ -9,6 +9,7 @@ import '../../core/ui/app_grouped_surface.dart';
 import '../../core/ui/app_section_header.dart';
 import '../../core/ui/model_selector_sheet.dart';
 import '../auth/auth_controller.dart';
+import 'about_page.dart';
 import 'settings_controller.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -139,6 +140,24 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const AppSectionHeader(label: '关于'),
+          AppGroupedSurface(
+            child: ListTile(
+              leading: const Icon(Icons.info_outline_rounded, color: AppColors.primary),
+              title: const Text('关于家助手'),
+              subtitle: const Text(
+                '版本号、使用条款与隐私政策',
+                style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const AboutPage()),
+                );
+              },
             ),
           ),
           if (s.error != null) ...[

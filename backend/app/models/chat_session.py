@@ -22,7 +22,7 @@ class ChatSession(Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(128), nullable=False, server_default="")
-    default_model: Mapped[str] = mapped_column(String(32), nullable=False, server_default="chatgpt")
+    default_model: Mapped[str] = mapped_column(String(32), nullable=False, server_default="chatgpt-5.2")
 
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

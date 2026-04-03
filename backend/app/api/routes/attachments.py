@@ -72,13 +72,21 @@ def presign(
         raise _err("VALIDATION_ERROR", "单个会话最多 5 个附件", status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     storage = get_storage_driver()
+    if settings.storage_driver == "local":
+        bucket = "local"
+    elif settings.storage_driver == "supabase":
+        bucket = settings.supabase_bucket
+    elif settings.storage_driver == "cos":
+        bucket = settings.cos_bucket
+    else:
+        bucket = "local"
     attachment = Attachment(
         session_id=session.id,
         user_id=user.id,
         filename=req.filename,
         content_type=req.content_type,
         size_bytes=req.size_bytes,
-        storage_bucket=settings.supabase_bucket if settings.storage_driver != "local" else "local",
+        storage_bucket=bucket,
         storage_path="",  # set after id is known
         status="active",
         deleted_at=None,
@@ -191,6 +199,39 @@ def commit(
 ## 注意：会话附件列表的冻结接口为：
 ## GET /api/sessions/{session_id}/attachments
 ## （已在 sessions 路由中实现）
+
+
+@router.get("/{attachment_id}/file")
+def download_attachment_file(
+    attachment_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Response:
+    """登录用户下载/预览本人会话附件（供 App 内图片、PDF 等预览）。"""
+    attachment = (
+        db.query(Attachment)
+        .filter(
+            Attachment.id == attachment_id,
+            Attachment.user_id == user.id,
+            Attachment.deleted_at.is_(None),
+            Attachment.status == "active",
+        )
+        .one_or_none()
+    )
+    if not attachment:
+        raise _err("NOT_FOUND", "Attachment not found", status.HTTP_404_NOT_FOUND)
+
+    storage = get_storage_driver()
+    try:
+        raw = storage.read_bytes(bucket=attachment.storage_bucket, object_path=attachment.storage_path)
+    except Exception:
+        raise _err("NOT_FOUND", "File not found", status.HTTP_404_NOT_FOUND)
+
+    media = attachment.content_type or "application/octet-stream"
+    fn = (attachment.filename or "file").replace('"', "_")
+    return Response(
+        content=raw,
+        media_type=media,
+        headers={"Content-Disposition": f'inline; filename="{fn}"'},
+    )
 
 
 @router.delete("/{attachment_id}")

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} - Brave 配置</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body class="page">
+    {% set nav_title = "Brave 实时检索" %}
+    {% set nav_active = "brave" %}
+    {% include "admin/_nav.html" %}
+
+    {% if not fernet_ok %}
+    <div class="banner-warn" role="status">
+      <strong>尚未配置 <code>FIELD_ENCRYPTION_FERNET_KEY</code>。</strong>无法将 Brave API Key 加密入库。请写入服务器 <code>.env</code> 并重启后端后再保存 Key。
+      生成密钥：<code style="word-break:break-all;">python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code>
+    </div>
+    {% endif %}
+
+    {% if err == "fernet" %}
+    <div class="banner-err" role="alert">
+      <strong>保存失败：</strong>加密 Key 时出错。请检查 <code>FIELD_ENCRYPTION_FERNET_KEY</code> 是否为有效的 Fernet 密钥并已重启服务。
+    </div>
+    {% endif %}
+
+    {% if saved_ok %}
+    <div class="banner-ok" role="status">已保存，或测试连接已完成。</div>
+    {% endif %}
+
+    {% if err == "need_key" %}
+    <div class="banner-err" role="alert">
+      <strong>已勾选「启用 Brave」，但当前没有可用的 API Key。</strong>请在下方输入框<strong>粘贴完整 Key</strong>后再点「保存配置」。若曾保存过密文但更换了 Fernet 密钥，也需重新粘贴保存。
+    </div>
+    {% endif %}
+
+    {% if brave_key_missing %}
+    <div class="banner-warn" role="status">
+      <strong>Brave 已启用，但未检测到可用 Key</strong>（聊天会返回 <code>config_missing</code>）。请粘贴 Key 并保存。若已保存密文，可在「实时能力」页查看脱敏状态与 Fernet 是否匹配。
+    </div>
+    {% endif %}
+
+    <div class="grid" style="max-width:800px;">
+      <div class="card">
+        <p style="margin-top:0; color:#555; font-size:14px; line-height:1.55;">
+          Brave 参数与 Key 仅存<strong>本机数据库</strong>；Key 经服务端<strong>加密存储</strong>，调用 Brave API 时在<strong>服务端解密</strong>。普通用户与 App <strong>不可见</strong> Key。
+        </p>
+        <p style="font-size:13px; color:#666;">当前 Key 脱敏：<code>{{ api_key_masked }}</code></p>
+        <p style="font-size:12px; color:#888;">最近保存：{{ b.updated_at }}；最近测试：{{ b.last_test_at or "（未测试）" }} —
+          {% if b.last_test_ok == true %}<span style="color:#2d6a4f">成功</span>{% elif b.last_test_ok == false %}<span style="color:#c1121f">失败</span>{% else %}—{% endif %}
+          {% if b.last_test_message %} — {{ b.last_test_message }}{% endif %}
+        </p>
+
+        <form method="post" action="/admin/brave" id="form-brave">
+          <div class="row" style="margin:8px 0;">
+            <label><input type="checkbox" name="brave_enabled" {% if b.brave_enabled %}checked{% endif %} />启用 Brave 实时检索（总开关）</label>
+          </div>
+
+          <label for="api_key">Brave API Key</label>
+          <p style="font-size:12px; color:#666; margin:4px 0 8px 0;">
+            <strong>首次或未配置时：</strong>须粘贴 Key 再保存。仅打开总开关不会写入 Key。<br />
+            若已有 Key：<strong>留空</strong>表示不修改；更换 Key 请直接粘贴覆盖。
+          </p>
+          <input id="api_key" name="api_key" type="password" autocomplete="new-password" placeholder="粘贴 Brave Search API Key" />
+          <div class="row" style="margin:8px 0;">
+            <label><input type="checkbox" name="clear_api_key" value="on" />清除已保存的 Key</label>
+          </div>
+
+          <label for="base_url">Base URL</label>
+          <input id="base_url" name="base_url" type="text" value="{{ b.base_url }}" />
+
+          <h3 style="margin-top:22px;">子能力</h3>
+          <div class="row"><label><input type="checkbox" name="web_search_enabled" {% if b.web_search_enabled %}checked{% endif %} />Web Search</label></div>
+          <div class="row"><label><input type="checkbox" name="news_search_enabled" {% if b.news_search_enabled %}checked{% endif %} />News Search</label></div>
+          <div class="row"><label><input type="checkbox" name="llm_context_enabled" {% if b.llm_context_enabled %}checked{% endif %} />LLM Context</label></div>
+
+          <label for="default_result_count">默认结果数量（1–20）</label>
+          <input id="default_result_count" name="default_result_count" type="number" min="1" max="20" value="{{ b.default_result_count }}" />
+
+          <label for="timeout_seconds">超时（秒，3–120）</label>
+          <input id="timeout_seconds" name="timeout_seconds" type="number" min="3" max="120" value="{{ b.timeout_seconds }}" />
+
+          <label for="country">国家/地区（如 cn、us）</label>
+          <input id="country" name="country" type="text" value="{{ b.country }}" maxlength="8" />
+
+          <label for="search_lang">搜索语言（如 zh-hans、en）</label>
+          <input id="search_lang" name="search_lang" type="text" value="{{ b.search_lang }}" maxlength="16" />
+
+          <div class="row" style="margin:12px 0;">
+            <label><input type="checkbox" name="cache_enabled" {% if b.cache_enabled %}checked{% endif %} />允许服务端短时缓存成功结果（约 120 秒）</label>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit">保存配置</button>
+          </div>
+        </form>
+
+        <form method="post" action="/admin/brave/test" style="margin-top:8px;">
+          <p style="font-size:12px; color:#666; margin:0 0 8px 0;">使用当前库中 Key 向 Brave 发起一次测试请求，并写入上表「最近测试」。</p>
+          <button type="submit" class="btn-secondary">测试 Brave 连接</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

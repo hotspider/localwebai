@@ -1,21 +1,17 @@
 <!doctype html>
-<html>
+<html lang="zh-Hans">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }} 管理后台 - {{ u.username }}</title>
     <link rel="stylesheet" href="/static/admin.css" />
   </head>
   <body class="page">
-    <div class="topbar">
-      <div class="title">账号：{{ u.username }}</div>
-      <div class="actions">
-        <a class="btn" href="/admin/settings">LLM 配置</a>
-        <a class="btn" href="/admin/users">返回列表</a>
-        <form method="post" action="/admin/logout">
-          <button type="submit">退出</button>
-        </form>
-      </div>
-    </div>
+    {% set nav_title = "账号：" ~ u.username %}
+    {% set nav_active = "users" %}
+    {% include "admin/_nav.html" %}
+
+    <p style="margin:0 16px 8px 16px; font-size:14px;"><a href="/admin/users">← 返回用户列表</a></p>
 
     <div class="grid">
       <div class="card">

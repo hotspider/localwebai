@@ -69,6 +69,10 @@ class AssistantMessageBubble extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
+                if (message.realtimeMeta != null) ...[
+                  _RealtimeMetaBanner(meta: message.realtimeMeta!),
+                  const SizedBox(height: 8),
+                ],
                 MarkdownBody(
                   data: message.contentText,
                   selectable: true,
@@ -102,7 +106,7 @@ class AssistantMessageBubble extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Text(
-                              '${s['title'] ?? ''} ${s['url'] ?? ''}',
+                              '${s['title'] ?? ''}\n${s['url'] ?? ''}',
                               style: const TextStyle(fontSize: 12, color: ChatColors.textTertiary, height: 1.4),
                             ),
                           ),
@@ -114,6 +118,107 @@ class AssistantMessageBubble extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RealtimeMetaBanner extends StatelessWidget {
+  const _RealtimeMetaBanner({required this.meta});
+
+  final Map<String, dynamic> meta;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = meta['status']?.toString() ?? '';
+    final msg = meta['message']?.toString() ?? '';
+    final q = meta['queried_at']?.toString();
+    String? queriedLocal;
+    if (q != null && q.isNotEmpty) {
+      final dt = DateTime.tryParse(q);
+      if (dt != null) {
+        queriedLocal = dt.toLocal().toString().split('.').first;
+      }
+    }
+
+    if (status == 'ok') {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: ChatColors.subBg,
+          borderRadius: BorderRadius.circular(AppRadius.panelInset),
+          border: Border.all(color: ChatColors.accentBlue.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.wifi_tethering_rounded, size: 16, color: ChatColors.accentBlue),
+                const SizedBox(width: 6),
+                Text(
+                  '已联网查询（Brave）',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: ChatColors.accentBlue,
+                  ),
+                ),
+              ],
+            ),
+            if (queriedLocal != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '查询时间：$queriedLocal',
+                style: const TextStyle(fontSize: 11, color: ChatColors.textTertiary, height: 1.3),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: ChatColors.errorBg,
+        borderRadius: BorderRadius.circular(AppRadius.panelInset),
+        border: Border.all(color: ChatColors.error.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 16, color: ChatColors.error),
+              const SizedBox(width: 6),
+              Text(
+                '实时查询未完成（$status）',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: ChatColors.error,
+                ),
+              ),
+            ],
+          ),
+          if (msg.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              msg,
+              style: const TextStyle(fontSize: 11, color: ChatColors.textSecondary, height: 1.35),
+            ),
+          ],
+          if (queriedLocal != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '请求时间：$queriedLocal',
+              style: const TextStyle(fontSize: 11, color: ChatColors.textTertiary, height: 1.3),
+            ),
+          ],
+        ],
       ),
     );
   }

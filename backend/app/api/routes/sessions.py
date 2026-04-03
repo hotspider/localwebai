@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
@@ -22,6 +22,7 @@ from app.schemas.chat import (
     SessionListResponse,
     SessionOut,
     SourceItem,
+    attachment_ids_from_column,
 )
 
 
@@ -54,10 +55,27 @@ def create_session(
 
 @router.get("", response_model=SessionListResponse)
 def list_sessions(
-    limit: int = 50, offset: int = 0, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    limit: int = 50,
+    offset: int = 0,
+    q: str | None = Query(None, max_length=200, description="按会话标题或任意消息正文模糊搜索（不区分大小写）"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> SessionListResponse:
-    q = db.query(ChatSession).filter(ChatSession.user_id == user.id, ChatSession.deleted_at.is_(None))
-    sessions = q.order_by(ChatSession.updated_at.desc()).limit(limit).offset(offset).all()
+    base = db.query(ChatSession).filter(ChatSession.user_id == user.id, ChatSession.deleted_at.is_(None))
+    if q and (needle := q.strip()):
+        pattern = f"%{needle}%"
+        msg_match = exists(
+            select(1)
+            .select_from(ChatMessage)
+            .where(
+                ChatMessage.session_id == ChatSession.id,
+                ChatMessage.user_id == user.id,
+                ChatMessage.deleted_at.is_(None),
+                ChatMessage.content_text.ilike(pattern),
+            )
+        )
+        base = base.filter(or_(ChatSession.title.ilike(pattern), msg_match))
+    sessions = base.order_by(ChatSession.updated_at.desc()).limit(limit).offset(offset).all()
 
     items: list[SessionListItem] = []
     for s in sessions:
@@ -126,7 +144,16 @@ def get_session_detail(session_id: str, user: User = Depends(get_current_user), 
         if isinstance(m.sources_json, list):
             for sitem in m.sources_json:
                 if isinstance(sitem, dict) and sitem.get("url"):
-                    sources.append(SourceItem(**sitem))
+                    sources.append(
+                        SourceItem(
+                            title=str(sitem.get("title") or ""),
+                            url=str(sitem["url"]),
+                            snippet=str(sitem.get("snippet") or ""),
+                            provider=str(sitem.get("provider") or "brave"),
+                            type=str(sitem.get("type") or "web"),
+                        )
+                    )
+        rmeta = m.realtime_meta if isinstance(m.realtime_meta, dict) else None
         msg_out.append(
             MessageOut(
                 id=str(m.id),
@@ -136,6 +163,8 @@ def get_session_detail(session_id: str, user: User = Depends(get_current_user), 
                 web_search_enabled=bool(m.web_search_enabled),
                 sources=sources,
                 created_at=m.created_at.isoformat(),
+                realtime_meta=rmeta,
+                attachment_ids=attachment_ids_from_column(m.attachment_ids),
             )
         )
 

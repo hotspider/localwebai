@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -22,7 +23,7 @@ class ApiClient {
             baseUrl: baseUrl,
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 60),
-            sendTimeout: const Duration(seconds: 60),
+            sendTimeout: const Duration(minutes: 5),
             headers: {HttpHeaders.contentTypeHeader: 'application/json'},
           ),
         ) {
@@ -82,6 +83,7 @@ class ApiClient {
     Map<String, dynamic> body, {
     Duration? receiveTimeout,
     Duration? sendTimeout,
+    ProgressCallback? onSendProgress,
   }) async {
     try {
       final resp = await dio.post(
@@ -90,6 +92,7 @@ class ApiClient {
         options: (receiveTimeout != null || sendTimeout != null)
             ? Options(receiveTimeout: receiveTimeout, sendTimeout: sendTimeout)
             : null,
+        onSendProgress: onSendProgress,
       );
       return (resp.data as Map).cast<String, dynamic>();
     } catch (e) {
@@ -124,6 +127,24 @@ class ApiClient {
   Future<void> delete(String path) async {
     try {
       await dio.delete(path);
+    } catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  /// 下载二进制（附件预览等）；自动带 Bearer。
+  Future<Uint8List> getBytes(
+    String path, {
+    Duration receiveTimeout = const Duration(minutes: 2),
+  }) async {
+    try {
+      final resp = await dio.get<List<int>>(
+        path,
+        options: Options(responseType: ResponseType.bytes, receiveTimeout: receiveTimeout),
+      );
+      final data = resp.data;
+      if (data == null) return Uint8List(0);
+      return Uint8List.fromList(data);
     } catch (e) {
       throw _mapDioError(e);
     }

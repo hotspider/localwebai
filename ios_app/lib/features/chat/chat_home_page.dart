@@ -9,6 +9,9 @@ import '../history/history_controller.dart';
 import '../settings/settings_page.dart';
 import '../shell/chat_drawer.dart';
 import '../../core/format/chat_display_strings.dart';
+import '../../models/attachment.dart';
+import 'attachment_preview/attachment_image_preview_screen.dart';
+import 'attachment_preview/attachment_pdf_preview_screen.dart';
 import 'chat_controller.dart';
 import 'widgets/chat_composer.dart';
 import 'widgets/chat_message_list.dart';
@@ -27,12 +30,13 @@ class ChatHomePage extends StatefulWidget {
   State<ChatHomePage> createState() => _ChatHomePageState();
 }
 
-class _ChatHomePageState extends State<ChatHomePage> {
+class _ChatHomePageState extends State<ChatHomePage> with WidgetsBindingObserver {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _input = TextEditingController();
   final _listController = ScrollController();
   ChatController? _chat;
   int _lastMessageCount = 0;
+  double _lastKeyboardInset = 0;
 
   void _onChatChanged() {
     final chat = _chat;
@@ -46,6 +50,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final chat = context.read<ChatController>();
@@ -61,10 +66,23 @@ class _ChatHomePageState extends State<ChatHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _chat?.removeListener(_onChatChanged);
     _input.dispose();
     _listController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final bottom = MediaQuery.viewInsetsOf(context).bottom;
+      if (bottom > _lastKeyboardInset && bottom > 0) {
+        _scrollToBottom();
+      }
+      _lastKeyboardInset = bottom;
+    });
   }
 
   void _scrollToBottom() {
@@ -73,6 +91,31 @@ class _ChatHomePageState extends State<ChatHomePage> {
       final max = _listController.position.maxScrollExtent;
       _listController.animateTo(max, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
     });
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _openAttachmentPreview(AttachmentItem item) {
+    final ct = item.contentType.toLowerCase();
+    if (ct.startsWith('image/')) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => AttachmentImagePreviewScreen(attachmentId: item.id, title: item.filename),
+        ),
+      );
+      return;
+    }
+    if (ct == 'application/pdf') {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => AttachmentPdfPreviewScreen(attachmentId: item.id, title: item.filename),
+        ),
+      );
+      return;
+    }
+    showChatToast(context, '暂不支持预览该类型（当前支持图片与 PDF）');
   }
 
   Future<void> _send() async {
@@ -87,9 +130,7 @@ class _ChatHomePageState extends State<ChatHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
-  Future<void> _openDrawer() async {
-    await context.read<HistoryController>().refresh();
-    if (!mounted) return;
+  void _openDrawer() {
     _scaffoldKey.currentState?.openDrawer();
   }
 
@@ -127,29 +168,40 @@ class _ChatHomePageState extends State<ChatHomePage> {
     final showCenterComposer = showComposer && !hasMessages;
     final showBottomComposer = showComposer && hasMessages;
 
+    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: ChatColors.pageBg,
+      // 手动用 viewInsets 整体上移，避免部分 iOS 输入法下 Scaffold 未压缩 body 导致键盘挡住消息区
+      resizeToAvoidBottomInset: false,
       drawer: const ChatDrawer(),
       onDrawerChanged: (isOpen) {
         if (isOpen) {
-          // 侧滑打开 drawer 时也要刷新“最近对话”，确保标题/更新时间立刻同步。
+          // 打开侧栏：清空搜索并拉取最近会话（与服务器同步标题/时间）
           // ignore: discarded_futures
-          context.read<HistoryController>().refresh();
+          context.read<HistoryController>().fetchSessionList(resetToRecent: true);
         }
       },
-      body: Column(
-        children: [
-          ChatTopBar(
-            modelLabel: c.model.label,
-            sessionTitle: _sessionDisplayTitle(c),
-            showSessionTitle: hasMessages,
-            onOpenDrawer: _openDrawer,
-            onOpenModelSheet: () => _openModelSheet(c),
-            onNewSession: () {
-              if (!c.sessionLoading && !c.sending) context.read<ChatController>().newSession();
-            },
-          ),
+      body: GestureDetector(
+        onTap: _dismissKeyboard,
+        behavior: HitTestBehavior.translucent,
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(bottom: keyboardBottom),
+          child: Column(
+            children: [
+              ChatTopBar(
+              modelLabel: c.model.label,
+              sessionTitle: _sessionDisplayTitle(c),
+              showSessionTitle: hasMessages,
+              onOpenDrawer: _openDrawer,
+              onOpenModelSheet: () => _openModelSheet(c),
+              onNewSession: () {
+                if (!c.sessionLoading && !c.sending) context.read<ChatController>().newSession();
+              },
+            ),
           if (c.error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -203,10 +255,13 @@ class _ChatHomePageState extends State<ChatHomePage> {
                     ? ChatMessageList(
                         scrollController: _listController,
                         messages: c.messages,
-                        loading: c.sending,
+                        loading: c.showAssistantGeneratingTail,
                         onCopy: _copyMessage,
                         attachmentsForMessage: c.attachmentsForMessage,
                         onRetrySend: (id) => context.read<ChatController>().retrySend(id),
+                        outboundSendingRowFor: c.outboundSendingRowVisible,
+                        onOpenAttachment: _openAttachmentPreview,
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       )
                     : Center(
                         child: Padding(
@@ -234,7 +289,12 @@ class _ChatHomePageState extends State<ChatHomePage> {
             Container(
               width: double.infinity,
               decoration: const BoxDecoration(color: Colors.transparent),
-              padding: EdgeInsets.fromLTRB(16, 10, 16, 12 + MediaQuery.paddingOf(context).bottom),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                10,
+                16,
+                12 + MediaQuery.paddingOf(context).bottom,
+              ),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
@@ -246,7 +306,9 @@ class _ChatHomePageState extends State<ChatHomePage> {
                 ),
               ),
             ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

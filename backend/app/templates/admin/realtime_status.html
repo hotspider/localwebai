@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_name }} - 实时能力</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body class="page">
+    {% set nav_title = "实时能力状态" %}
+    {% set nav_active = "realtime" %}
+    {% include "admin/_nav.html" %}
+
+    <div class="grid" style="max-width:760px;">
+      <div class="card">
+        <h2 style="margin-top:0;">Brave（当前唯一实时检索提供方）</h2>
+        <p style="font-size:14px; color:#555;">
+          字段加密主密钥 <code>FIELD_ENCRYPTION_FERNET_KEY</code>：<strong>{{ "已配置" if fernet_ok else "未配置" }}</strong>
+          （仅写在服务器环境，用于加密入库的 API Key；聊天时在后端解密调用，不下发客户端。）
+        </p>
+        {% if b %}
+        <p style="font-size:14px; color:#555;"><strong>Key 是否可用：</strong>{{ "是" if brave_key_usable else "否" }}；脱敏：<code>{{ brave_key_masked }}</code></p>
+        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+          <tr><td style="padding:6px 0;"><b>总开关</b></td><td>{{ "开" if b.brave_enabled else "关" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>库内密文</b></td><td>{{ "有" if b.api_key_encrypted else "无" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>历史明文列</b></td><td>{{ "有（建议到 Brave 页重新保存以改为密文）" if b.api_key_plain else "无" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>Base URL</b></td><td><code>{{ b.base_url }}</code></td></tr>
+          <tr><td style="padding:6px 0;"><b>Web / News / LLM Context</b></td><td>{{ "开" if b.web_search_enabled else "关" }} / {{ "开" if b.news_search_enabled else "关" }} / {{ "开" if b.llm_context_enabled else "关" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>默认条数 / 超时</b></td><td>{{ b.default_result_count }} / {{ b.timeout_seconds }}s</td></tr>
+          <tr><td style="padding:6px 0;"><b>国家 / 语言</b></td><td>{{ b.country }} / {{ b.search_lang }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>缓存</b></td><td>{{ "开" if b.cache_enabled else "关" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>配置更新</b></td><td>{{ b.updated_at }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>最近测试</b></td><td>{{ b.last_test_at or "—" }}</td></tr>
+          <tr><td style="padding:6px 0;"><b>最近结果</b></td><td>{% if b.last_test_ok == true %}成功{% elif b.last_test_ok == false %}失败{% else %}—{% endif %}</td></tr>
+          <tr><td style="padding:6px 0; vertical-align:top;"><b>测试说明</b></td><td>{{ b.last_test_message or "—" }}</td></tr>
+        </table>
+        <div class="form-actions" style="margin-top:16px;">
+          <a class="btn btn-secondary" href="/admin/brave" style="margin-top:0;">前往编辑 Brave 配置</a>
+        </div>
+        {% else %}
+        <p style="color:#c1121f;">尚未初始化 <code>brave_settings</code>，请执行 <code>alembic upgrade head</code>。</p>
+        {% endif %}
+        <p style="font-size:13px; color:#666; margin-top:16px;">聊天侧状态码：<code>ok</code>、<code>config_missing</code>、<code>provider_error</code>、<code>no_reliable_result</code>。</p>
+      </div>
+    </div>
+  </body>
+</html>

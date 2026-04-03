@@ -1,71 +1,117 @@
 <!doctype html>
-<html>
+<html lang="zh-Hans">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }} 管理后台 - LLM 配置</title>
     <link rel="stylesheet" href="/static/admin.css" />
   </head>
   <body class="page">
-    <div class="topbar">
-      <div class="title">LLM / API 配置</div>
-      <div style="display:flex; gap:12px; align-items:center;">
-        <a href="/admin/users">用户管理</a>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button type="submit">退出</button>
-        </form>
-      </div>
-    </div>
+    {% set nav_title = "LLM / API 配置" %}
+    {% set nav_active = "settings" %}
+    {% include "admin/_nav.html" %}
 
-    {% if saved_ok %}
-    <div class="card" style="margin:16px; border-color:#2d6a4f;">
-      <p style="margin:0; color:#2d6a4f;">已保存。聊天将立即使用新配置，无需重启服务。</p>
+    {% if not fernet_ok %}
+    <div class="banner-warn" role="status">
+      <strong>尚未配置字段加密主密钥。</strong>在服务器 <code>.env</code> 中设置 <code>FIELD_ENCRYPTION_FERNET_KEY</code>（Fernet 密钥）并<strong>重启后端</strong>后，才能在本页保存 OpenAI / DeepSeek / Gemini 的 API Key；Base URL 与代理仍可保存。
+      生成密钥（在已安装依赖的 venv 中执行）：<br />
+      <code style="display:block; margin-top:8px; word-break:break-all;">python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code>
     </div>
     {% endif %}
 
-    <div class="grid" style="max-width:720px;">
+    {% if err == "fernet" %}
+    <div class="banner-err" role="alert">
+      <strong>保存失败：</strong>无法加密 API Key。请确认已配置有效的 <code>FIELD_ENCRYPTION_FERNET_KEY</code> 并已重启服务；勿将普通密码当作 Fernet 密钥使用。
+    </div>
+    {% endif %}
+
+    {% if saved_ok %}
+    <div class="banner-ok" role="status">已保存。聊天将使用新配置；密钥仅在后端进程内解密，不会下发给 App。</div>
+    {% endif %}
+
+    <div class="grid" style="max-width:760px;">
       <div class="card">
-        <p style="margin-top:0; color:#666; font-size:14px;">
-          此处配置<b>优先于</b>服务器上的 <code>.env</code>。API Key 仅存数据库，请妥善保管备份与数据库安全。
+        <p style="margin-top:0; color:#555; font-size:14px; line-height:1.55;">
+          您在浏览器中<strong>明文输入</strong>的 Key 经 HTTPS 传到本服务后，由服务端使用 <code>FIELD_ENCRYPTION_FERNET_KEY</code> <strong>加密写入数据库</strong>；调用大模型时在<strong>服务端解密</strong>。
+          家庭助手 <strong>App / 前端从不接收</strong>这些第三方 Key。非敏感项（Base URL、代理）仍以明文存库。
         </p>
+        <p style="font-size:13px; color:#666;">此处配置<strong>优先于</strong>服务器 <code>.env</code> 中的同名项。</p>
 
-        <form method="post" action="/admin/settings">
-          <h2>OpenAI（ChatGPT 路线）</h2>
+        <form method="post" action="/admin/settings" id="form-llm">
+          <h2 style="margin-top:0;">OpenAI（ChatGPT 路线）</h2>
           <p style="font-size:13px; color:#666;">
-            当前 Key 来源：
-            {% if openai_key_stored_in_db %}<strong>后台已配置</strong>（留空保存=不修改；勾选「清除」则改回 .env）{% else %}<strong>.env 或未设置</strong>{% endif %}
+            后台 Key 状态：
+            {% if openai_key_stored_in_db %}<strong>已在库中（加密或历史明文）</strong> — 脱敏：<code>{{ openai_key_masked }}</code>
+            {% else %}<strong>未在后台保存</strong>（将使用 .env 中的 <code>OPENAI_API_KEY</code>，若存在）{% endif %}
           </p>
-          <label>OPENAI_API_KEY</label>
-          <input name="openai_api_key" type="password" autocomplete="off" placeholder="输入新 Key；不修改请留空" />
+          <label for="openai_api_key">OPENAI_API_KEY（可选更新）</label>
+          <input id="openai_api_key" name="openai_api_key" type="password" autocomplete="off" placeholder="粘贴完整 Key；不修改请留空" />
           <div class="row" style="margin:8px 0;">
-            <label><input type="checkbox" name="clear_openai_api_key" />清除后台 Key，改用 .env</label>
+            <label><input type="checkbox" name="clear_openai_api_key" value="on" />清除后台中的 Key，改回仅使用 .env</label>
           </div>
 
-          <p style="font-size:12px; color:#555;">当前实际生效 Base URL：<code>{{ openai_base_url_effective }}</code></p>
-          <label>仅当需覆盖 .env 时填写 OpenAI Base URL</label>
-          <input name="openai_base_url" type="text" value="{{ openai_base_url_input }}" placeholder="留空保存=不用后台覆盖" />
-          <p style="font-size:12px; color:#888;">留空保存会删掉后台覆盖项，仍用 .env。</p>
+          <p style="font-size:12px; color:#555;">当前生效 Base URL：<code>{{ openai_base_url_effective }}</code></p>
+          <label for="openai_base_url">覆盖 OpenAI Base URL（可选）</label>
+          <input id="openai_base_url" name="openai_base_url" type="text" value="{{ openai_base_url_input }}" placeholder="留空并保存则删除后台覆盖" />
 
-          <p style="font-size:12px; color:#555;">当前实际生效代理：<code>{{ openai_proxy_effective or '（无）' }}</code></p>
-          <label>覆盖 OPENAI_PROXY（可选）</label>
-          <input name="openai_proxy" type="text" value="{{ openai_proxy_input }}" placeholder="留空保存=不用后台覆盖" />
+          <p style="font-size:12px; color:#555;">当前生效代理：<code>{{ openai_proxy_effective or '（无）' }}</code></p>
+          <label for="openai_proxy">覆盖 OPENAI_PROXY（可选）</label>
+          <input id="openai_proxy" name="openai_proxy" type="text" value="{{ openai_proxy_input }}" placeholder="留空并保存则删除后台覆盖" />
 
-          <h2 style="margin-top:24px;">DeepSeek</h2>
+          <h2 style="margin-top:28px;">DeepSeek</h2>
           <p style="font-size:13px; color:#666;">
-            当前 Key 来源：
-            {% if deepseek_key_stored_in_db %}<strong>后台已配置</strong>{% else %}<strong>.env 或未设置</strong>{% endif %}
+            后台 Key 状态：
+            {% if deepseek_key_stored_in_db %}<strong>已在库中</strong> — 脱敏：<code>{{ deepseek_key_masked }}</code>
+            {% else %}<strong>未在后台保存</strong>（将使用 .env 中的 <code>DEEPSEEK_API_KEY</code>，若存在）{% endif %}
           </p>
-          <label>DEEPSEEK_API_KEY</label>
-          <input name="deepseek_api_key" type="password" autocomplete="off" placeholder="输入新 Key；不修改请留空" />
+          <label for="deepseek_api_key">DEEPSEEK_API_KEY（可选更新）</label>
+          <input id="deepseek_api_key" name="deepseek_api_key" type="password" autocomplete="off" placeholder="粘贴完整 Key；不修改请留空" />
           <div class="row" style="margin:8px 0;">
-            <label><input type="checkbox" name="clear_deepseek_api_key" />清除后台 Key，改用 .env</label>
+            <label><input type="checkbox" name="clear_deepseek_api_key" value="on" />清除后台中的 Key，改回仅使用 .env</label>
           </div>
 
-          <p style="font-size:12px; color:#555;">当前实际生效 DeepSeek URL：<code>{{ deepseek_base_url_effective }}</code></p>
-          <label>覆盖 DeepSeek Base URL（可选）</label>
-          <input name="deepseek_base_url" type="text" value="{{ deepseek_base_url_input }}" placeholder="留空保存=不用后台覆盖" />
+          <p style="font-size:12px; color:#555;">当前生效 DeepSeek URL：<code>{{ deepseek_base_url_effective }}</code></p>
+          <label for="deepseek_base_url">覆盖 DeepSeek Base URL（可选）</label>
+          <input id="deepseek_base_url" name="deepseek_base_url" type="text" value="{{ deepseek_base_url_input }}" placeholder="留空并保存则删除后台覆盖" />
 
-          <div style="margin-top:20px;">
-            <button type="submit">保存</button>
+          <p style="font-size:12px; color:#555;">当前生效 DeepSeek 代理：<code>{{ deepseek_proxy_effective or '（无）' }}</code></p>
+          <label for="deepseek_proxy">覆盖 DEEPSEEK_PROXY（可选）</label>
+          <input id="deepseek_proxy" name="deepseek_proxy" type="text" value="{{ deepseek_proxy_input }}" placeholder="留空并保存则删除后台覆盖" />
+
+          <p style="font-size:12px; color:#555;">当前生效 DeepSeek 模型 ID：<code>{{ deepseek_model_effective }}</code></p>
+          <p style="font-size:12px; color:#666; margin-top:0;">
+            官方常用：<code>deepseek-chat</code>（对话，随平台升级指向当前主力版本）、<code>deepseek-reasoner</code>（推理模式）。与
+            <a href="https://api-docs.deepseek.com/" rel="noopener noreferrer" target="_blank">DeepSeek API 文档</a> 保持一致。
+          </p>
+          <label for="deepseek_model_text">覆盖 DeepSeek Model（可选）</label>
+          <input id="deepseek_model_text" name="deepseek_model_text" type="text" value="{{ deepseek_model_input }}" placeholder="例如 deepseek-chat；留空并保存则删除后台覆盖，改回 .env" />
+
+          <h2 style="margin-top:28px;">Google Gemini</h2>
+          <p style="font-size:13px; color:#666;">
+            后台 Key 状态：
+            {% if gemini_key_stored_in_db %}<strong>已在库中</strong> — 脱敏：<code>{{ gemini_key_masked }}</code>
+            {% else %}<strong>未在后台保存</strong>（将使用 .env 中的 <code>GEMINI_API_KEY</code>，若存在）{% endif %}
+          </p>
+          <p style="font-size:12px; color:#555;">
+            路由 <code>gemini-flash</code> / <code>gemini-pro</code> 对应的官方 model id 由服务器环境变量
+            <code>GEMINI_MODEL_FLASH</code>、<code>GEMINI_MODEL_PRO</code> 决定（默认 gemini-3-flash-preview / gemini-3.1-pro-preview）。
+          </p>
+          <label for="gemini_api_key">GEMINI_API_KEY（可选更新）</label>
+          <input id="gemini_api_key" name="gemini_api_key" type="password" autocomplete="off" placeholder="Google AI Studio 或兼容端点的 Key；不修改请留空" />
+          <div class="row" style="margin:8px 0;">
+            <label><input type="checkbox" name="clear_gemini_api_key" value="on" />清除后台中的 Key，改回仅使用 .env</label>
+          </div>
+
+          <p style="font-size:12px; color:#555;">当前生效 Gemini API Base：<code>{{ gemini_base_url_effective }}</code></p>
+          <label for="gemini_base_url">覆盖 Gemini Base URL（可选）</label>
+          <input id="gemini_base_url" name="gemini_base_url" type="text" value="{{ gemini_base_url_input }}" placeholder="留空则使用默认 generativelanguage.googleapis.com/v1beta" />
+
+          <p style="font-size:12px; color:#555;">当前生效代理：<code>{{ gemini_proxy_effective or '（无）' }}</code></p>
+          <label for="gemini_proxy">覆盖 GEMINI_PROXY（可选）</label>
+          <input id="gemini_proxy" name="gemini_proxy" type="text" value="{{ gemini_proxy_input }}" placeholder="留空并保存则删除后台覆盖" />
+
+          <div class="form-actions">
+            <button type="submit">保存全部更改</button>
           </div>
         </form>
       </div>

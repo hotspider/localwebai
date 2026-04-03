@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from app.core.config import settings
@@ -12,10 +14,12 @@ class DeepSeekClient(LlmClient):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        proxy: str = "",
     ) -> None:
         self.api_key = settings.deepseek_api_key if api_key is None else api_key
         b = settings.deepseek_base_url if base_url is None else base_url
         self.base_url = b.rstrip("/")
+        self.proxy = (proxy or "").strip()
 
     async def chat_text(self, *, messages: list[dict], model: str) -> LlmResponse:
         if not self.api_key:
@@ -26,10 +30,12 @@ class DeepSeekClient(LlmClient):
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}"}
         payload = {"model": model, "messages": messages}
-        async with httpx.AsyncClient(timeout=60) as client:
+        client_kw: dict[str, Any] = {"timeout": 60.0}
+        if self.proxy:
+            client_kw["proxy"] = self.proxy
+        async with httpx.AsyncClient(**client_kw) as client:
             r = await client.post(url, headers=headers, json=payload)
             r.raise_for_status()
             data = r.json()
         content = data["choices"][0]["message"]["content"]
         return LlmResponse(text=content or "")
-

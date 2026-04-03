@@ -35,5 +35,5 @@ class User(Base):
     chat_message_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
-    default_model: Mapped[str] = mapped_column(String(32), nullable=False, server_default="chatgpt")
+    default_model: Mapped[str] = mapped_column(String(32), nullable=False, server_default="chatgpt-5.2")
 

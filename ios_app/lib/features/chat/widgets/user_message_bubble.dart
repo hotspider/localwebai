@@ -10,12 +10,17 @@ class UserMessageBubble extends StatelessWidget {
     required this.message,
     required this.attachments,
     this.onRetry,
+    /// 请求体已发出（可开始展示「生成回复」）；为 false 时仅展示「发送中」
+    this.showOutboundSendingRow = true,
+    this.onOpenAttachment,
     super.key,
   });
 
   final ChatMessage message;
   final List<dynamic> attachments;
   final VoidCallback? onRetry;
+  final bool showOutboundSendingRow;
+  final void Function(AttachmentItem item)? onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +49,7 @@ class UserMessageBubble extends StatelessWidget {
                     _UserAttachmentThumb(
                       filename: a.filename,
                       contentType: a.contentType,
+                      onTap: onOpenAttachment == null ? null : () => onOpenAttachment!(a),
                     ),
                 ],
               ),
@@ -58,7 +64,14 @@ class UserMessageBubble extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
             ),
-            if (message.sendState != ChatMessageSendState.sent) ...[
+            if (message.sendState == ChatMessageSendState.failed) ...[
+              const SizedBox(height: 8),
+              _SendStateRow(
+                state: message.sendState,
+                error: message.sendError,
+                onRetry: onRetry,
+              ),
+            ] else if (message.sendState == ChatMessageSendState.sending && showOutboundSendingRow) ...[
               const SizedBox(height: 8),
               _SendStateRow(
                 state: message.sendState,
@@ -139,41 +152,55 @@ class _UserAttachmentThumb extends StatelessWidget {
   const _UserAttachmentThumb({
     required this.filename,
     required this.contentType,
+    this.onTap,
   });
 
   final String filename;
   final String contentType;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final isImage = contentType.toLowerCase().startsWith('image/');
-    // 后端当前不回传图片可访问 URL；先用“图片/文件”标识，保持 DeepSeek 式可见痕迹。
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      constraints: const BoxConstraints(maxWidth: 220),
-      decoration: BoxDecoration(
-        color: ChatColors.subBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ChatColors.dividerMain),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isImage ? Icons.image_outlined : Icons.insert_drive_file_outlined,
-            size: 18,
-            color: ChatColors.textTertiary,
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isImage ? Icons.image_outlined : Icons.insert_drive_file_outlined,
+          size: 18,
+          color: ChatColors.textTertiary,
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            filename.isEmpty ? (isImage ? '图片' : '附件') : filename,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, color: ChatColors.textSecondary, height: 1.05, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              filename.isEmpty ? (isImage ? '图片' : '附件') : filename,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: ChatColors.textSecondary, height: 1.05, fontWeight: FontWeight.w600),
-            ),
-          ),
+        ),
+        if (onTap != null) ...[
+          const SizedBox(width: 4),
+          Icon(Icons.open_in_new_rounded, size: 14, color: ChatColors.textMuted.withValues(alpha: 0.85)),
         ],
+      ],
+    );
+
+    return Material(
+      color: ChatColors.subBg,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(maxWidth: 220),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: ChatColors.dividerMain),
+          ),
+          child: child,
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,8 +12,68 @@ import '../history/history_controller.dart';
 import '../history/history_page.dart';
 import '../settings/settings_page.dart';
 
-class ChatDrawer extends StatelessWidget {
+class ChatDrawer extends StatefulWidget {
   const ChatDrawer({super.key});
+
+  @override
+  State<ChatDrawer> createState() => _ChatDrawerState();
+}
+
+class _ChatDrawerState extends State<ChatDrawer> {
+  final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+  Timer? _debounce;
+  HistoryController? _hist;
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_onSearchTextTick);
+  }
+
+  void _onSearchTextTick() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final h = context.read<HistoryController>();
+    if (_hist != h) {
+      _hist?.removeListener(_syncSearchFromHist);
+      _hist = h;
+      _hist!.addListener(_syncSearchFromHist);
+    }
+  }
+
+  /// 父级 resetToRecent 清空关键词后，同步清空输入框（避免抢焦点时误清）
+  void _syncSearchFromHist() {
+    final h = _hist;
+    if (h == null || !mounted) return;
+    if (h.listSearchQuery.isEmpty && _search.text.isNotEmpty && !_searchFocus.hasFocus) {
+      _search.removeListener(_onSearchTextTick);
+      _search.clear();
+      _search.addListener(_onSearchTextTick);
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _hist?.removeListener(_syncSearchFromHist);
+    _search.removeListener(_onSearchTextTick);
+    _search.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _scheduleSearch() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 380), () {
+      if (!mounted) return;
+      context.read<HistoryController>().fetchSessionList(q: _search.text.trim());
+    });
+  }
 
   Future<void> _confirmDelete(BuildContext context, String sessionId) async {
     final ok = await showAppConfirmDialog(
@@ -41,6 +103,7 @@ class ChatDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final hist = context.watch<HistoryController>();
+    final searchBusy = hist.loading && hist.listSearchQuery.trim().isNotEmpty;
     final username = auth.me?['username']?.toString() ?? '';
     final initial = username.isNotEmpty ? username[0].toUpperCase() : '?';
 
@@ -107,7 +170,7 @@ class ChatDrawer extends StatelessWidget {
                     ),
                     onPressed: () async {
                       Navigator.pop(context);
-                      await context.read<HistoryController>().refresh();
+                      await context.read<HistoryController>().fetchSessionList(resetToRecent: true);
                       if (!context.mounted) return;
                       await Navigator.of(context).push<void>(
                         MaterialPageRoute<void>(builder: (_) => const HistoryPage()),
@@ -121,9 +184,60 @@ class ChatDrawer extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextField(
+                controller: _search,
+                focusNode: _searchFocus,
+                onChanged: (_) => _scheduleSearch(),
+                style: const TextStyle(color: ChatColors.textPrimary, fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: '搜索历史对话（标题或内容）',
+                  hintStyle: TextStyle(color: ChatColors.textMuted.withValues(alpha: 0.9), fontSize: 14),
+                  prefixIcon: const Icon(Icons.search_rounded, color: ChatColors.textTertiary, size: 22),
+                  suffixIcon: searchBusy
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: ChatColors.accentBlue),
+                          ),
+                        )
+                      : _search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: '清除',
+                              onPressed: () {
+                                _debounce?.cancel();
+                                _search.clear();
+                                context.read<HistoryController>().fetchSessionList(q: '');
+                              },
+                              icon: const Icon(Icons.close_rounded, color: ChatColors.textTertiary, size: 20),
+                            ),
+                  filled: true,
+                  fillColor: ChatColors.pageBg,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: ChatColors.dividerMain),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: ChatColors.dividerMain),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: ChatColors.inputFocusBorder, width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                '最近对话',
+                hist.listSearchQuery.trim().isEmpty ? '最近对话' : '搜索结果',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -134,43 +248,61 @@ class ChatDrawer extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Expanded(
-              child: hist.loading
+              child: hist.loading && hist.sessions.isEmpty
                   ? const Center(child: CircularProgressIndicator(color: ChatColors.accentBlue))
                   : hist.sessions.isEmpty
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.chat_bubble_outline_rounded, size: 40, color: ChatColors.textMuted.withValues(alpha: 0.45)),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  '还没有历史对话',
-                                  style: TextStyle(color: ChatColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 16),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '发起一次新对话后，聊天记录会显示在这里。',
-                                  style: TextStyle(fontSize: 13, color: ChatColors.textMuted, height: 1.4),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 20),
-                                FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: ChatColors.accentBlue,
-                                    foregroundColor: ChatColors.textOnAccent,
-                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            child: hist.listSearchQuery.trim().isNotEmpty
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.search_off_rounded, size: 40, color: ChatColors.textMuted.withValues(alpha: 0.45)),
+                                      const SizedBox(height: 12),
+                                      const Text(
+                                        '未找到相关对话',
+                                        style: TextStyle(color: ChatColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        '可缩短或更换关键词；完整列表请点「查看全部历史记录」。',
+                                        style: TextStyle(fontSize: 13, color: ChatColors.textMuted, height: 1.4),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  )
+                                : Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.chat_bubble_outline_rounded, size: 40, color: ChatColors.textMuted.withValues(alpha: 0.45)),
+                                      const SizedBox(height: 12),
+                                      const Text(
+                                        '还没有历史对话',
+                                        style: TextStyle(color: ChatColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        '发起一次新对话后，聊天记录会显示在这里。',
+                                        style: TextStyle(fontSize: 13, color: ChatColors.textMuted, height: 1.4),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: ChatColors.accentBlue,
+                                          foregroundColor: ChatColors.textOnAccent,
+                                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                        ),
+                                        onPressed: () async {
+                                          Navigator.pop(context);
+                                          await context.read<ChatController>().newSession();
+                                        },
+                                        child: const Text('去发起新对话'),
+                                      ),
+                                    ],
                                   ),
-                                  onPressed: () async {
-                                    Navigator.pop(context);
-                                    await context.read<ChatController>().newSession();
-                                  },
-                                  child: const Text('去发起新对话'),
-                                ),
-                              ],
-                            ),
                           ),
                         )
                       : ListView.separated(

@@ -1,44 +1,44 @@
 <!doctype html>
-<html>
+<html lang="zh-Hans">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ app_name }} 管理后台 - 用户</title>
     <link rel="stylesheet" href="/static/admin.css" />
   </head>
   <body class="page">
-    <div class="topbar">
-      <div class="title">用户管理</div>
-      <div style="display:flex; gap:12px; align-items:center;">
-        <a href="/admin/settings">LLM 配置</a>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button type="submit">退出</button>
-        </form>
-      </div>
-    </div>
+    {% set nav_title = "用户管理" %}
+    {% set nav_active = "users" %}
+    {% include "admin/_nav.html" %}
 
     <div class="grid">
       <div class="card">
-        <h2>创建账号</h2>
+        <h2 style="margin-top:0;">创建账号</h2>
         <form method="post" action="/admin/users">
           <label>用户名</label>
-          <input name="username" />
+          <input name="username" autocomplete="username" />
           <label>临时密码</label>
-          <input name="temp_password" type="text" />
-          <div class="row">
-            <label><input type="checkbox" name="can_web_search" />允许联网搜索</label>
-          </div>
+          <input name="temp_password" type="text" autocomplete="new-password" />
+          <label>联网搜索（实时）权限</label>
+          <select name="can_web_search_mode">
+            <option value="default">系统默认（当前：{{ "开启" if sys_default_web else "关闭" }}）</option>
+            <option value="on">单独开启</option>
+            <option value="off">单独关闭</option>
+          </select>
           <div class="row">
             <label><input type="checkbox" name="can_upload" checked />允许上传附件</label>
           </div>
           <div class="row">
             <label><input type="checkbox" name="is_active" checked />启用账号</label>
           </div>
-          <button type="submit">创建</button>
+          <div class="form-actions">
+            <button type="submit">创建用户</button>
+          </div>
         </form>
       </div>
 
       <div class="card">
-        <h2>账号列表</h2>
+        <h2 style="margin-top:0;">账号列表</h2>
         <table>
           <thead>
             <tr>
@@ -71,4 +71,3 @@
     </div>
   </body>
 </html>
-

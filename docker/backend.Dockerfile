@@ -1,4 +1,6 @@
-FROM python:3.12-slim
+# 国内直连 Docker Hub 易超时，可在 docker/.env 设置 DOCKER_PYTHON_IMAGE 覆盖（见 docker/README.md）
+ARG PYTHON_IMAGE=python:3.12-slim
+FROM ${PYTHON_IMAGE}
 
 WORKDIR /app
 

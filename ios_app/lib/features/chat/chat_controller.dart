@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -32,8 +33,11 @@ class ChatController extends ChangeNotifier {
   bool canWebSearch = false;
   bool canUpload = true;
 
-  /// 后端配置的路由模型 -> 实际 OpenAI model id（用于前端展示一致性）
+  /// 后端配置的路由模型 -> 实际提供商 model id（用于前端展示一致性）
   final Map<String, String> resolvedModelIdByRoute = {};
+
+  /// `/api/models` 是否已成功拉取（失败时仅影响「后端实际模型」副标题，不影响发消息）
+  bool routeModelsCatalogReady = false;
 
   // 本地附件草稿队列（更像 ChatGPT/DeepSeek：可显示上传中/失败可重试/可移除）
   // ignore: library_private_types_in_public_api
@@ -54,8 +58,51 @@ class ChatController extends ChangeNotifier {
 
   List<AttachmentItem> attachmentsForMessage(String messageId) => _messageAttachments[messageId] ?? const [];
 
+  /// 根据消息上的 attachmentIds 与会话 attachments 列表重建气泡映射（并重挂 local_ 乐观消息）
+  void _syncMessageAttachmentsFromMessages() {
+    final merged = <String, List<AttachmentItem>>{};
+    for (final m in messages) {
+      if (m.role != 'user' || m.attachmentIds.isEmpty) continue;
+      final items = m.attachmentIds
+          .map((id) => attachments.where((a) => a.id == id).toList().firstOrNull)
+          .whereType<AttachmentItem>()
+          .toList();
+      if (items.isNotEmpty) merged[m.id] = items;
+    }
+    for (final e in _messageAttachments.entries) {
+      if (e.key.startsWith('local_')) merged[e.key] = e.value;
+    }
+    _messageAttachments
+      ..clear()
+      ..addAll(merged);
+  }
+
+  /// 用户气泡内是否仍显示「发送中…」（与列表底部「正在生成回复」互斥）
+  bool outboundSendingRowVisible(String messageId) => !(_chatRequestBodyDispatched[messageId] ?? false);
+
+  /// 列表底部生成占位：仅在请求体已发出、等待服务端/模型时显示
+  bool get showAssistantGeneratingTail {
+    if (!sending) return false;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      final m = messages[i];
+      if (m.role == 'user' && m.sendState == ChatMessageSendState.sending) {
+        return _chatRequestBodyDispatched[m.id] == true;
+      }
+    }
+    return false;
+  }
+
+  void _markChatRequestBodyDispatched(String localMessageId) {
+    if (_chatRequestBodyDispatched[localMessageId] == true) return;
+    _chatRequestBodyDispatched[localMessageId] = true;
+    notifyListeners();
+  }
+
   final Map<String, _PendingSend> _pendingSends = {};
   int _inflightSends = 0;
+
+  /// 聊天 POST 请求体已写入连接（视为「发送成功」）；此后才展示「正在生成回复」
+  final Map<String, bool> _chatRequestBodyDispatched = {};
 
   Future<void> syncMePermissions() async {
     try {
@@ -71,10 +118,17 @@ class ChatController extends ChangeNotifier {
             items
                 .map((e) => e.cast<String, dynamic>())
                 .where((e) => (e['route']?.toString().isNotEmpty ?? false))
-                .map((e) => MapEntry(e['route'].toString(), (e['resolved_openai_model'] ?? '').toString())),
+                .map(
+                  (e) => MapEntry(
+                    e['route'].toString(),
+                    (e['resolved_model'] ?? e['resolved_openai_model'] ?? '').toString(),
+                  ),
+                ),
           );
-      } catch (_) {
-        // 仅用于展示，不影响主流程
+        routeModelsCatalogReady = true;
+      } catch (e, st) {
+        routeModelsCatalogReady = false;
+        debugPrint('GET /api/models 失败（仅影响模型映射展示）: $e\n$st');
       }
     } on ApiException catch (e) {
       if (e.code == 'UNAUTHORIZED') {
@@ -93,9 +147,6 @@ class ChatController extends ChangeNotifier {
 
   void setModel(LlmModel m) {
     model = m;
-    if (!m.isOpenAiFamily) {
-      webSearchEnabled = false;
-    }
     notifyListeners();
   }
 
@@ -181,6 +232,7 @@ class ChatController extends ChangeNotifier {
           .cast<Map>()
           .map((e) => AttachmentItem.fromJson(e.cast<String, dynamic>()))
           .toList();
+      _syncMessageAttachmentsFromMessages();
       model = LlmModel.fromApi(currentSession!.defaultModel);
       webSearchEnabled = false;
     } catch (e) {
@@ -209,6 +261,7 @@ class ChatController extends ChangeNotifier {
           .cast<Map>()
           .map((e) => AttachmentItem.fromJson(e.cast<String, dynamic>()))
           .toList();
+      _syncMessageAttachmentsFromMessages();
       // 刷新成功后不应残留上传错误提示
       uploadError = null;
     } catch (e) {
@@ -234,12 +287,13 @@ class ChatController extends ChangeNotifier {
   /// 返回值：是否已插入本地用户消息（用于调用方立即清空输入框）。
   bool enqueueSend(String text) {
     final trimmed = text.trim();
+    final idsForSend = List<String>.from(pendingAttachmentIds);
     final pendingItems = pendingAttachmentIds
         .map((id) => attachments.where((a) => a.id == id).toList().firstOrNull)
         .whereType<AttachmentItem>()
         .toList();
 
-    final effectiveWeb = model.isOpenAiFamily && canWebSearch && webSearchEnabled;
+    final effectiveWeb = canWebSearch && webSearchEnabled;
     final localId = 'local_${DateTime.now().millisecondsSinceEpoch}_${_randId()}';
 
     final optimisticUser = ChatMessage(
@@ -251,6 +305,7 @@ class ChatController extends ChangeNotifier {
       sources: const [],
       createdAt: DateTime.now(),
       sendState: ChatMessageSendState.sending,
+      attachmentIds: pendingItems.map((e) => e.id).toList(),
     );
     messages = [...messages, optimisticUser];
     if (pendingItems.isNotEmpty) {
@@ -267,6 +322,7 @@ class ChatController extends ChangeNotifier {
       text: trimmed,
       modelApiValue: model.apiValue,
       webSearchEnabled: effectiveWeb,
+      attachmentIds: idsForSend,
     );
 
     notifyListeners();
@@ -292,6 +348,8 @@ class ChatController extends ChangeNotifier {
           sources: m.sources,
           createdAt: m.createdAt,
           sendState: ChatMessageSendState.sending,
+          realtimeMeta: m.realtimeMeta,
+          attachmentIds: m.attachmentIds,
         ),
         ...messages.sublist(idx + 1),
       ];
@@ -319,6 +377,13 @@ class ChatController extends ChangeNotifier {
     }
     final sessionId = currentSession!.id;
 
+    _chatRequestBodyDispatched[localMessageId] = false;
+
+    Timer? outboundFallback;
+    outboundFallback = Timer(const Duration(milliseconds: 600), () {
+      _markChatRequestBodyDispatched(localMessageId);
+    });
+
     try {
       final resp = await apiClient.postJson(
         '/api/chat/messages',
@@ -327,9 +392,17 @@ class ChatController extends ChangeNotifier {
         'model': payload.modelApiValue,
         'web_search_enabled': payload.webSearchEnabled,
         'text': payload.text,
+        'attachment_ids': payload.attachmentIds,
         },
         // 模型端响应可能 > 60s；避免前端 receiveTimeout 误判“网络异常”
         receiveTimeout: const Duration(minutes: 5),
+        onSendProgress: (sent, total) {
+          if (total <= 0) {
+            if (sent > 0) _markChatRequestBodyDispatched(localMessageId);
+          } else if (sent >= total) {
+            _markChatRequestBodyDispatched(localMessageId);
+          }
+        },
       );
       final um = ChatMessage.fromJson((resp['user_message'] as Map).cast<String, dynamic>());
       final am = ChatMessage.fromJson((resp['assistant_message'] as Map).cast<String, dynamic>());
@@ -358,6 +431,8 @@ class ChatController extends ChangeNotifier {
     } catch (e) {
       _markSendFailed(localMessageId, describeErrorForUser(e));
     } finally {
+      outboundFallback.cancel();
+      _chatRequestBodyDispatched.remove(localMessageId);
       _inflightSends = max(0, _inflightSends - 1);
       sending = _inflightSends > 0;
       notifyListeners();
@@ -383,6 +458,8 @@ class ChatController extends ChangeNotifier {
         createdAt: m.createdAt,
         sendState: ChatMessageSendState.failed,
         sendError: message,
+        realtimeMeta: m.realtimeMeta,
+        attachmentIds: m.attachmentIds,
       ),
       ...messages.sublist(idx + 1),
     ];
@@ -527,12 +604,12 @@ class ChatController extends ChangeNotifier {
       uploadHeaders.remove('Content-Type');
       uploadHeaders.remove(HttpHeaders.contentTypeHeader);
       uploadHeaders[HttpHeaders.contentTypeHeader] = draft.contentType;
-      uploadHeaders[Headers.contentLengthHeader] = body.length.toString();
+      // 不要手动设置 Content-Length：dio 可能同时使用 chunked 传输或重复设置，
+      // Nginx 会直接判定为 Bad Request（400）。
 
       final uploadOptions = Options(
         headers: uploadHeaders,
         extra: const {'skipAuth': true},
-        contentType: draft.contentType,
         responseType: ResponseType.plain,
       );
 
@@ -695,11 +772,13 @@ class _PendingSend {
     required this.text,
     required this.modelApiValue,
     required this.webSearchEnabled,
+    required this.attachmentIds,
   });
 
   final String localMessageId;
   final String text;
   final String modelApiValue;
   final bool webSearchEnabled;
+  final List<String> attachmentIds;
 }
 

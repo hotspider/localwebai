@@ -17,6 +17,76 @@
 .title { font-size: 18px; font-weight: 600; }
 .actions { display: flex; gap: 12px; align-items: center; }
 
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.topbar-actions a {
+  color: #1a5fb4;
+  text-decoration: none;
+  font-size: 14px;
+}
+.topbar-actions a:hover { text-decoration: underline; }
+.topbar-actions a.nav-active {
+  font-weight: 600;
+  color: #111;
+  text-decoration: none;
+}
+button.btn-logout {
+  margin-top: 0;
+  padding: 8px 14px;
+  background: #fff;
+  color: #333;
+  border: 1px solid #d7d9e0;
+}
+button.btn-logout:hover { background: #f3f4f7; }
+
+.banner-warn {
+  margin: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e6a100;
+  background: #fffbf0;
+  color: #7a5a00;
+  font-size: 14px;
+}
+.banner-warn code { font-size: 13px; }
+.banner-err {
+  margin: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #c1121f;
+  background: #fff5f5;
+  color: #8a0000;
+  font-size: 14px;
+}
+.banner-ok {
+  margin: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #2d6a4f;
+  background: #f4fbf7;
+  color: #1b4332;
+  font-size: 14px;
+}
+
+.form-actions {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+button.btn-secondary {
+  background: #fff;
+  color: #222;
+  border: 1px solid #c9ccd6;
+}
+button.btn-secondary:hover { background: #f6f7fb; }
+
 .grid {
   display: grid;
   gap: 16px;

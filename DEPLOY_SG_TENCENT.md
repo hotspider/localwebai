@@ -1,6 +1,6 @@
 ## 公网部署（新加坡腾讯云）- 第一版
 
-目标：在公网域名 `ai.nasclaw.com` 提供服务（HTTPS），但账号体系仍仅家庭内部管理员创建。
+目标：在公网域名 `app.nasclaw.com` 提供服务（HTTPS），但账号体系仍仅家庭内部管理员创建。
 
 ---
 
@@ -14,7 +14,7 @@
 ---
 
 ## 2. 域名与证书
-1. DNS：将 `ai.nasclaw.com` A 记录指向服务器公网 IP
+1. DNS：将 `app.nasclaw.com` A 记录指向服务器公网 IP
 2. HTTPS：建议用 Caddy（最简单）或 Nginx + certbot
 
 ---
@@ -80,8 +80,8 @@ cp .env.example .env
 - `ADMIN_PASSWORD`：管理员初始密码
 - `OPENAI_API_KEY`、`DEEPSEEK_API_KEY`：按需填
 - `STORAGE_DRIVER="supabase"` 并填 Supabase 三项
-- `PUBLIC_BASE_URL="https://ai.nasclaw.com"`
-- `CORS_ALLOW_ORIGINS="https://ai.nasclaw.com"`
+- `PUBLIC_BASE_URL="https://app.nasclaw.com"`
+- `CORS_ALLOW_ORIGINS="https://app.nasclaw.com"`
 - `SESSION_COOKIE_SECURE=true`
 
 ### 5.4 初始化数据库
@@ -123,7 +123,7 @@ sudo systemctl start family-ai-backend
 安装 Caddy 后创建 `/etc/caddy/Caddyfile`：
 
 ```caddy
-ai.nasclaw.com {
+app.nasclaw.com {
   encode gzip
   reverse_proxy 127.0.0.1:8000
 }
@@ -137,8 +137,8 @@ sudo systemctl reload caddy
 ---
 
 ## 7. 管理后台与 App
-- 管理后台（公网）：`https://ai.nasclaw.com/admin/login`
+- 管理后台（公网）：`https://app.nasclaw.com/admin/login`
 - iOS App：
   - 开发期：`http://127.0.0.1:8000`
-  - 上线：把 `ios_app/lib/core/config/constants.dart` 的 `apiBaseUrl` 改为 `https://ai.nasclaw.com` 后重新打包。
+  - 上线：Release 默认见 `ios_app/lib/core/config/app_api_host.dart`（`https://app.nasclaw.com`），或构建时 `--dart-define=API_BASE_URL=...`。
 

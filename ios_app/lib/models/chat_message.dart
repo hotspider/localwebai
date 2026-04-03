@@ -11,6 +11,8 @@ class ChatMessage {
     required this.createdAt,
     this.sendState = ChatMessageSendState.sent,
     this.sendError,
+    this.realtimeMeta,
+    this.attachmentIds = const [],
   });
 
   final String id;
@@ -23,8 +25,16 @@ class ChatMessage {
   final ChatMessageSendState sendState;
   final String? sendError;
 
+  /// Brave 实时元数据：status / message / queried_at / provider 等
+  final Map<String, dynamic>? realtimeMeta;
+
+  /// 本条用户消息关联的附件 id（服务端持久化，用于重进会话后还原气泡）
+  final List<String> attachmentIds;
+
   factory ChatMessage.fromJson(Map<String, dynamic> j) {
     final rawSources = (j['sources'] as List?) ?? const <dynamic>[];
+    final rm = j['realtime_meta'];
+    final rawAtt = j['attachment_ids'] as List?;
     return ChatMessage(
       id: (j['id'] ?? '').toString(),
       role: (j['role'] ?? 'assistant').toString(),
@@ -37,6 +47,8 @@ class ChatMessage {
           .toList(),
       createdAt: DateTime.tryParse(j['created_at'] as String? ?? '') ?? DateTime.now(),
       sendState: ChatMessageSendState.sent,
+      realtimeMeta: rm is Map ? rm.cast<String, dynamic>() : null,
+      attachmentIds: rawAtt == null ? [] : rawAtt.map((e) => e.toString()).toList(),
     );
   }
 }

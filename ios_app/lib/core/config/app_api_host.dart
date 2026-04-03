@@ -3,28 +3,26 @@ import 'package:flutter/foundation.dart';
 /// 应用请求的 API 根地址（无末尾 `/`）。
 ///
 /// **规则**
-/// 1. **本地开发**（Debug / Profile）：固定 `http://127.0.0.1:8000`，联调本机 `uvicorn`。
-/// 2. **正式发布**（Release）：使用 [kProductionShipApiBaseUrl]。上架或交付安装包前，请改成你的外网根地址（建议 HTTPS）。
-/// 3. **可选覆盖**（任意模式）：构建时传入  
-///    `--dart-define=API_BASE_URL=https://你的域名`  
-///    将**优先于**上面 1、2 条（适合 CI 不写死代码）。
+/// 1. **仅 Debug**：`http://127.0.0.1:8000`（**仅 iOS 模拟器 / 与后端同机**有意义；**真机 Debug 上 127.0.0.1 是手机自己**，会连不上）。
+/// 2. **Profile / Release**：使用 [kProductionShipApiBaseUrl]（真机日常请用 Profile 或 Release 跑，或见下条）。
+/// 3. **任意模式覆盖**：`--dart-define=API_BASE_URL=https://你的域名` 优先级最高。
 String resolveApiBaseUrl() {
   const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '');
   if (fromEnv.trim().isNotEmpty) {
     return _trimTrailingSlash(fromEnv.trim());
   }
-  if (kReleaseMode) {
+  if (kReleaseMode || kProfileMode) {
     return _trimTrailingSlash(kProductionShipApiBaseUrl);
   }
   return _trimTrailingSlash(kLocalDevApiBaseUrl);
 }
 
-/// 本地开发默认（模拟器访问 Mac 上的后端）
+/// 本地 Debug 默认（模拟器里访问宿主机 Mac 上的后端；真机请用 Profile/Release 或 dart-define）
 const String kLocalDevApiBaseUrl = 'http://127.0.0.1:8000';
 
-/// **发布到外网前**：改为正式环境根地址（无末尾 `/`）。
-/// 示例：`https://api.example.com` 或 `https://example.com`（若 API 与站点同域需带路径则写完整前缀）。
-const String kProductionShipApiBaseUrl = 'http://43.160.235.149:8000';
+/// **正式发布（Release）** 使用的 API 根地址（须与后端 `PUBLIC_BASE_URL` 的协议+主机一致，建议 HTTPS）。
+/// 构建时可覆盖：`flutter build ios --release --dart-define=API_BASE_URL=https://你的域名`
+const String kProductionShipApiBaseUrl = 'https://app.nasclaw.com';
 
 String _trimTrailingSlash(String u) {
   var s = u.trim();

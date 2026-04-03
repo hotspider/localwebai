@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "models": {
+    "chatgpt": {
+      "supports_vision": true,
+      "supports_long_context": true,
+      "max_context_tokens": 128000
+    },
+    "chatgpt-5.2": {
+      "supports_vision": true,
+      "supports_long_context": true,
+      "max_context_tokens": 128000
+    },
+    "chatgpt-5.4": {
+      "supports_vision": true,
+      "supports_long_context": true,
+      "max_context_tokens": 128000
+    },
+    "deepseek": {
+      "supports_vision": false,
+      "supports_long_context": true,
+      "max_context_tokens": 64000
+    },
+    "gemini-flash": {
+      "supports_vision": true,
+      "supports_long_context": true,
+      "max_context_tokens": 1000000
+    },
+    "gemini-pro": {
+      "supports_vision": true,
+      "supports_long_context": true,
+      "max_context_tokens": 2000000
+    }
+  }
+}

@@ -29,7 +29,11 @@ Future<void> main() async {
         Provider.value(value: secureStore),
         Provider.value(value: apiClient),
         ChangeNotifierProvider(
-          create: (_) => AuthController(apiClient: apiClient, secureStore: secureStore)..init(),
+          create: (_) {
+            final c = AuthController(apiClient: apiClient, secureStore: secureStore);
+            c.init().catchError((Object _, StackTrace __) {});
+            return c;
+          },
         ),
         ChangeNotifierProvider(create: (_) => ChatController(apiClient: apiClient)),
         ChangeNotifierProvider(create: (_) => HistoryController(apiClient: apiClient)),

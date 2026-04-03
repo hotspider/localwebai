@@ -9,7 +9,11 @@ _SALT = "attachment-public-link-v1"
 
 
 def _serializer() -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(settings.jwt_secret, salt=_SALT)
+    # 公开附件链接用于“模型侧拉取图片/附件”，不依赖登录态。
+    # 这里不要绑死 jwt_secret：生产环境可能会轮转 jwt_secret，但我们希望历史链接在短时间内依然可用。
+    # 优先使用 FIELD_ENCRYPTION_FERNET_KEY（服务端稳定配置），未配置时再回退到 jwt_secret。
+    secret = (settings.field_encryption_fernet_key or "").strip() or settings.jwt_secret
+    return URLSafeTimedSerializer(secret, salt=_SALT)
 
 
 def sign_attachment_id(attachment_id: str) -> str:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import html
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 from app.api.router import api_router
 from app.api.routes.admin import router as admin_router
@@ -39,11 +42,51 @@ def create_app() -> FastAPI:
     )
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+    _log = logging.getLogger("app.unhandled")
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):  # type: ignore[override]
+        _log.exception("%s %s", request.method, request.url.path)
+        # 管理后台是 HTML：不要返回 JSON，否则用户会看到 {"error":"INTERNAL_ERROR"...} 且无从排查
+        if request.url.path.startswith("/admin"):
+            dev_hint = ""
+            if (settings.environment or "").lower() == "dev":
+                safe = f"{type(exc).__name__}: {exc!s}"
+                if len(safe) > 800:
+                    safe = safe[:800] + "…"
+                dev_hint = (
+                    "<pre style='background:#f6f6f6;padding:12px;overflow:auto'>"
+                    f"{html.escape(safe)}</pre>"
+                )
+            return HTMLResponse(
+                status_code=500,
+                content=(
+                    "<!doctype html><html lang=zh-CN><head><meta charset=utf-8><title>管理后台错误</title></head><body>"
+                    "<h1>管理后台页面加载失败</h1>"
+                    "<p>常见于<strong>数据库未执行最新迁移</strong>（例如缺少 <code>brave_settings</code> 表）。"
+                    "请在服务器进入后端目录或容器内执行：</p>"
+                    "<pre style='background:#eee;padding:10px'>alembic upgrade head</pre>"
+                    "<p>Docker 部署一般会在容器启动时自动执行；若仍报错，请查看 <code>docker compose logs backend</code>。</p>"
+                    f"{dev_hint}"
+                    "<p><a href=\"/admin/users\">返回用户管理</a> · <a href=\"/admin/settings\">LLM 配置</a></p>"
+                    "</body></html>"
+                ),
+            )
+        details: dict = {}
+        if (settings.environment or "").lower() == "dev":
+            safe = f"{type(exc).__name__}: {exc!s}"
+            if len(safe) > 800:
+                safe = safe[:800] + "…"
+            details["dev_message"] = safe
         return JSONResponse(
             status_code=500,
-            content={"error": {"code": "INTERNAL_ERROR", "message": "Internal server error", "details": {}}},
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error",
+                    "details": details,
+                }
+            },
         )
 
     app.include_router(api_router, prefix="/api")

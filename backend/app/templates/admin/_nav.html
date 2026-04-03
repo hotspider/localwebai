@@ -1,0 +1,14 @@
+{# 包含前请 {% set nav_title = "…" %} {% set nav_active = "users"|"settings"|"brave"|"realtime"|"defaults" %} #}
+<div class="topbar">
+  <div class="title">{{ nav_title }}</div>
+  <nav class="topbar-actions" aria-label="管理后台导航">
+    <a href="/admin/users" class="{% if nav_active == 'users' %}nav-active{% endif %}">用户管理</a>
+    <a href="/admin/settings" class="{% if nav_active == 'settings' %}nav-active{% endif %}">LLM 配置</a>
+    <a href="/admin/brave" class="{% if nav_active == 'brave' %}nav-active{% endif %}">Brave</a>
+    <a href="/admin/realtime" class="{% if nav_active == 'realtime' %}nav-active{% endif %}">实时能力</a>
+    <a href="/admin/system-defaults" class="{% if nav_active == 'defaults' %}nav-active{% endif %}">系统默认</a>
+    <form method="post" action="/admin/logout" style="margin:0; display:inline;">
+      <button type="submit" class="btn-logout">退出</button>
+    </form>
+  </nav>
+</div>

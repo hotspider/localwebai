@@ -67,9 +67,13 @@ class _ChatComposerState extends State<ChatComposer> {
         .where((x) => x != null)
         .cast<dynamic>()
         .toList();
+    final pendingIdsWithoutMetadata = chat.pendingAttachmentIds
+        .where((id) => id.isNotEmpty && chat.attachments.every((a) => a.id != id))
+        .toList();
 
-    final hasSendableAttachment = pendingUploaded.isNotEmpty;
-    final hasAnyAttachmentUi = chat.attachmentDrafts.isNotEmpty || pendingUploaded.isNotEmpty;
+    // 与 pendingAttachmentIds 对齐：避免仅「服务端列表尚未同步」时整块预览区不显示
+    final hasSendableAttachment = chat.pendingAttachmentIds.isNotEmpty;
+    final hasAnyAttachmentUi = chat.attachmentDrafts.isNotEmpty || chat.pendingAttachmentIds.isNotEmpty;
     final showSend = _hasText || hasSendableAttachment;
     final canSend = showSend && !chat.sending;
 
@@ -92,6 +96,30 @@ class _ChatComposerState extends State<ChatComposer> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (chat.canWebSearch) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.public_rounded, size: 18, color: ChatColors.textTertiary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '联网搜索（实时 · Brave）',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: ChatColors.textSecondary,
+                    ),
+                  ),
+                ),
+                Switch.adaptive(
+                  value: chat.webSearchEnabled,
+                  onChanged: chat.sending ? null : context.read<ChatController>().setWebSearchEnabled,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           if (hasAnyAttachmentUi) ...[
             ComposerAttachmentPreviewGrid(
               drafts: chat.attachmentDrafts,
@@ -101,6 +129,7 @@ class _ChatComposerState extends State<ChatComposer> {
               onRetryDraft: (id) => context.read<ChatController>().retryUploadDraft(id),
               onRemoveUploaded: (id) => context.read<ChatController>().deleteAttachment(id),
               disableActions: chat.sending,
+              pendingIdsWithoutMetadata: pendingIdsWithoutMetadata,
             ),
             const SizedBox(height: 12),
           ],

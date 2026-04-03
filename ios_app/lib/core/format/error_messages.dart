@@ -12,10 +12,19 @@ String describeErrorForUser(Object e) {
       case 'NETWORK_ERROR':
         if (kDebugMode) {
           final detail = e.message.trim();
-          return '网络异常\n$detail\n当前 API：${CurrentApiBase.display}\n'
-              'Debug 联调请确认本机后端已启动；Release 包使用 `app_api_host.dart` 中的外网地址。';
+          final api = CurrentApiBase.display;
+          final loopbackHint = api.contains('127.0.0.1') || api.contains('localhost')
+              ? '\n真机 Debug 时 127.0.0.1 指向手机本身，连不到 Mac 上的后端。请改用：'
+                  '① `flutter run --profile` 或 Release 安装包（走线上 API）；'
+                  '② 或 `flutter run --dart-define=API_BASE_URL=https://app.nasclaw.com`；'
+                  '③ 或在同一 Wi‑Fi 下把 API 设为电脑的局域网 IP（如 http://192.168.x.x:8000）。'
+              : '';
+          return '网络异常\n$detail\n当前 API：$api\n'
+              '若在后端本机调试：请确认 uvicorn 已监听 0.0.0.0:8000 且地址与上文一致。$loopbackHint';
         }
         return '网络异常，请检查网络或确认后端已启动';
+      case 'REALTIME_REQUIRES_WEB_SEARCH':
+        return e.message.isNotEmpty ? e.message : '该问题需要开启联网搜索（实时）';
       case 'VALIDATION_ERROR':
       case 'BAD_REQUEST':
         return e.message.isNotEmpty ? e.message : '输入有误，请检查后重试';
